@@ -1,0 +1,9 @@
+{
+  "Collection": "company",
+  "ID": "600001",
+  "companyAddress": "123 Main Street",
+  "companyCity": "New York",
+  "companyCountry": "USA",
+  "companyEmployees": 122,
+  "companyRevenue": 1000000
+}
