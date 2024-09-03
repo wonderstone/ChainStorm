@@ -7,27 +7,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewNode(t *testing.T) {
+func TestReadJSONFile(t *testing.T) {
+	// the path of the data/company/600001.json file
 	dp := filepath.Join("data", "company", "600001.json")
-	// Read the json file and create a new node
-	dt, err := ReadJSONFile(dp)
+
+	// Call the ReadJSONFile function with the path of the temporary file
+	result, err := ReadJSONFile(dp)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to read JSON file: %v", err)
 	}
-	node := NewNode(WithNCollection("company"), WithNData(dt))
-	// Check if the node is created correctly
-	assert.Equal(t, "600001", node.ID)
-	// add node companyEmployees field by 1 and assign back to it
-	node.Data["companyEmployees"] = node.Data["companyEmployees"].(float64) + 1
-	// write the node back to the json file
-	err = WriteJSONFile(dp, node.Export())
+
+	// Check if the result is as expected
+	assert.Equal(t, "600001", result["ID"])
+	// change the result["companyEmployees"] to 1001 and write it back to the file
+	result["companyEmployees"] = result["companyEmployees"].(float64) +1
+	//+ add WriteJSONFile test
+
+	err = WriteJSONFile(dp, result)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("Failed to write JSON file: %v", err)
 	}
+
 }
 
-// test the InMemoryDB methods
-func TestInMemoryDB(t *testing.T) {
+func TestHandlerInterface(t *testing.T) {
 	// initialize the in-memory database
 	db := NewInMemoryDB()
 	fp := filepath.Join("config", "config.yaml")
@@ -55,5 +58,4 @@ func TestInMemoryDB(t *testing.T) {
 	dt, _ := ReadJSONFile(dp)
 
 	db.AddVertex(collection, dt)
-
 }

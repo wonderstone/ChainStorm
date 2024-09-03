@@ -9,9 +9,6 @@ type GraphDB interface {
 	Connect() error
 	Disconnect() error
 
-
-
-
 	// + CRUD operations
 	// + Create operations
 	AddVertex(collection string, db map[string]interface{}) (id string, err error)
@@ -32,17 +29,18 @@ type GraphDB interface {
 
 	// + Graph operations
 	// - Traversal operations
-	GetAllRelatedVertices(id string) ([]string, error)
-	GetAllRelatedVerticesInEdgeCollectiosn(id string, collections ...string) ([]string, error)
-	GetAllRelatedVerticesInRange(id string, min, max int) ([]string, error)
+	GetAllRelatedVertices(id string) ([][]string, error)
+	GetAllRelatedVerticesInEdgeSlice(id string, EdgeSlice ...string) ([][]string, error)
+	GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error)
 
-	// - Shortest path operations
-	ShortestPath(from, to string) ([]string, error)
-	ShortestPathInEdgeCollections(from, to string, collections ...string) ([]string, error)
-	ShortestPathInRange(from, to string, min, max int) ([]string, error)
+// 	// - Shortest path operations
+// 	ShortestPath(from, to string) ([]string, error)
+// 	ShortestPathInEdgeCollections(from, to string, collections ...string) ([]string, error)
+// 	ShortestPathInRange(from, to string, min, max int) ([]string, error)
 
-	// - Custom operations
-	CustomQuery(query string) ([]string, error)
+// 	// - Custom operations
+// 	CustomQuery(query string) ([]string, error)
+// 
 }
 
 
