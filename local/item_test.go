@@ -1,6 +1,7 @@
 package local
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -108,8 +109,38 @@ func TestInMemoryDB(t *testing.T) {
 		t.Error(err)
 	}
 
+	// Test BFSWithLevels
+	res:= db.BFSWithLevels("600001")
+	fmt.Println(res)
+	assert.Equal(t, 2, len(res))
+	// Test BFSWithLevelsStruct
+	resStruct := db.BFSWithLevelsStruct("600001")
+	for _, v := range resStruct {
+		fmt.Println(v.Node.ID,v.Level)
+	}
+	assert.Equal(t, 10, len(resStruct))
+	// TEST BFSWithPaths
 
+	resPaths := db.BFSWithPaths("600001")
+	for _, v := range resPaths {
+		fmt.Println(v.Node.ID,v.Path)
+	}
+	assert.Equal(t, 10, len(resPaths))
+	// Test BFSWithWeightRange
+	res = db.BFSWithWeightRange("600001", 0, 0)
+	fmt.Println(res)
+	assert.Equal(t, 1, len(res))
 
+	// TEst DFSWithLevelsStruct
+	tmp := db.DFS("600001")
+	tmp1 := db.DFSWithCompletePaths("600001")
+	tmp2 := db.DFSWithLevelsStruct("600001")
+	tmp3 := db.DFSWithPaths("600001")
+
+	fmt.Println(tmp)
+	fmt.Println(tmp1)
+	fmt.Println(tmp2)
+	fmt.Println(tmp3)
 
 
 }

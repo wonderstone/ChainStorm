@@ -85,169 +85,6 @@ func recoverFromPanic(err *error) {
 	}
 }
 
-// ~ 01 Fundamental Function Section End
-
-// ~ 02 Handler Interface Inplemetation Section
-// Init 用于初始化图数据库
-func (db *InMemoryDB) Init(yamlPath string) error {
-	// read the config yaml file from the yamlPath
-	// parse the yaml file and set the
-	// db.configPath is equal to dataPath field in the yaml file
-	// read the yaml file
-	yamlData, err := os.ReadFile(yamlPath)
-
-	if err != nil {
-		return err
-	}
-
-	// unmarshal the yaml data into a map
-	var data map[string]interface{}
-	err = yaml.Unmarshal(yamlData, &data)
-
-	if err != nil {
-		return err
-	}
-
-	// set the db.configPath
-	db.configPath = data["dataPath"].(string)
-	return nil
-}
-
-// Connect 用于连接图数据库
-// 读取本地文件并将其内容加载到内存中
-func (db *InMemoryDB) Connect() error {
-	// read the configPath file
-	// every collection is a directory in the configPath
-	// get all the json files in each collection
-	// read the json files and check if it is a node or an edge
-	// add the node or edge to the db.Nodes or db.Edges
-
-	// get all the directories in the configPath
-	dirs, err := os.ReadDir(db.configPath)
-	if err != nil {
-		return err
-	}
-
-	// iterate over the directories
-	for _, dir := range dirs {
-		// get the name of the directory
-		collection := dir.Name()
-		// get all the files in the directory
-		files, err := os.ReadDir(filepath.Join(db.configPath, collection))
-		if err != nil {
-			return err
-		}
-
-		// iterate over the files
-		for _, file := range files {
-			// get the name of the file
-			fileName := file.Name()
-			// get the path of the file
-			filePath := filepath.Join(db.configPath, collection, fileName)
-
-			// read the file
-			data, err := ReadJSONFile(filePath)
-			if err != nil {
-				return err
-			}
-
-			// check if the file is a node or an edge
-			if _, ok := data["From"]; ok {
-				// create an edge
-				from, to := data["From"].(string), data["To"].(string)
-				tmpWeight, ok := data["Weight"].(float64)
-				if !ok {
-					tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
-				}
-
-				edge := NewEdge(
-					WithEID(data["ID"].(string)),
-					WithECollection(collection),
-					WithEFrom(db.Nodes[from]),
-					WithETo(db.Nodes[to]),
-					WithEWeight(int(tmpWeight)),
-					WithEData(data))
-				db.Edges[edge.ID] = edge
-			} else {
-				// create a node
-				node := NewNode(
-					WithNCollection(collection),
-					WithNData(data))
-				db.Nodes[node.ID] = node
-			}
-		}
-	}
-	return nil
-}
-
-// Disconnect 用于断开图数据库的连接
-// 将内存中的数据写入到本地文件
-func (db *InMemoryDB) Disconnect() error {
-	// iterate over the db.Nodes
-	// write the node to the file
-	for _, node := range db.Nodes {
-		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.ID+".json"), node.Export())
-		if err != nil {
-			return err
-		}
-	}
-
-	// iterate over the db.Edges
-	// write the edge to the file
-	for _, edge := range db.Edges {
-		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.ID+".json"), edge.Export())
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// implement GraphDB interface, where collection is just a field in Node Data
-func (db *InMemoryDB) AddVertex(collection string, data map[string]interface{}) (id string, err error) {
-	db.m.Lock()
-	defer db.m.Unlock()
-	defer recoverFromPanic(&err)
-
-	n := NewNode(WithNCollection(collection), WithNData(data))
-	// check if the ID is already in the Nodes
-	// if yes, merge the data
-	// if no , add the node to the Nodes
-	if _, ok := db.Nodes[n.ID]; !ok {
-		db.Nodes[n.ID] = n
-	} else {
-		db.Nodes[n.ID].Collection = n.Collection
-		db.Nodes[n.ID].Data = MergeMaps(db.Nodes[n.ID].Data, n.Data)
-
-	}
-
-	return n.ID, err
-}
-
-func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[string]interface{}) (id string, err error) {
-	db.m.Lock()
-	defer db.m.Unlock()
-	defer recoverFromPanic(&err)
-
-	// ~ check if the from and to nodes exist
-	if _, ok := db.Nodes[from]; !ok {
-		return "", fmt.Errorf("node with ID %s does not exist", from)
-	}
-	if _, ok := db.Nodes[to]; !ok {
-		return "", fmt.Errorf("node with ID %s does not exist", to)
-	}
-
-	e := NewEdge(
-		WithECollection(collection),
-		WithEFrom(db.Nodes[from]),
-		WithETo(db.Nodes[to]),
-		WithEData(data))
-	db.Edges[e.ID] = e
-
-	return e.ID, err
-}
-
 // BFS 实现广度优先搜索
 // BFSWithLevels 实现广度优先搜索并返回每一层的节点
 func (db *InMemoryDB) BFSWithLevels(startID string) [][]string {
@@ -422,6 +259,54 @@ func (db *InMemoryDB) BFSWithPaths(startID string) []NodeWithPath {
 	return result
 }
 
+// DFSResult represents the result of a DFS traversal
+type DFSResult struct {
+	NodeID string
+	Path   []string
+	Level  int
+}
+
+// DFS 实现深度优先搜索
+func (db *InMemoryDB) DFS(startID string) []DFSResult {
+	db.m.RLock()
+	defer db.m.RUnlock()
+
+	startNode, exists := db.Nodes[startID]
+	if !exists {
+		return nil
+	}
+
+	var result []DFSResult
+	visited := make(map[string]bool)
+	var path []string
+
+	var dfs func(node *Node, level int)
+	dfs = func(node *Node, level int) {
+		if visited[node.ID] {
+			return
+		}
+		visited[node.ID] = true
+		path = append(path, node.ID)
+
+		// Create a copy of the current path to store in the result
+		pathCopy := make([]string, len(path))
+		copy(pathCopy, path)
+		result = append(result, DFSResult{NodeID: node.ID, Path: pathCopy, Level: level})
+
+		for _, edge := range db.Edges {
+			if edge.From.ID == node.ID && !visited[edge.To.ID] {
+				dfs(edge.To, level+1)
+			}
+		}
+
+		// Backtrack
+		path = path[:len(path)-1]
+	}
+
+	dfs(startNode, 0)
+	return result
+}
+
 // DFSWithLevelsStruct 实现深度优先搜索并返回每个节点及其层次
 func (db *InMemoryDB) DFSWithLevelsStruct(startID string) []NodeWithLevel {
 	db.m.RLock()
@@ -487,8 +372,16 @@ func (db *InMemoryDB) DFSWithPaths(startID string) []NodeWithPath {
 	return result
 }
 
-// DFSWithLevelsSlices 实现深度优先搜索并返回按层次划分的节点 ID 列表
-func (db *InMemoryDB) DFSWithLevelsSlices(startID string) [][]string {
+// DFSWithCompletePaths performs a depth-first search starting from the specified node ID and returns a list of complete paths.
+// A complete path is a sequence of node IDs from the starting node to a leaf node, where a leaf node is a node with no unvisited children.
+// If the starting node does not exist in the database, it returns nil.
+//
+// Parameters:
+// - startID: The ID of the starting node for the depth-first search.
+//
+// Returns:
+// - [][]string: A list of complete paths, where each path is represented as a slice of node IDs.
+func (db *InMemoryDB) DFSWithCompletePaths(startID string) [][]string {
 	db.m.RLock()
 	defer db.m.RUnlock()
 
@@ -500,27 +393,221 @@ func (db *InMemoryDB) DFSWithLevelsSlices(startID string) [][]string {
 	var result [][]string
 	visited := make(map[string]bool)
 
-	var dfs func(node *Node, level int)
-	dfs = func(node *Node, level int) {
-		if visited[node.ID] {
-			return
-		}
+	var dfs func(node *Node, path []string)
+	dfs = func(node *Node, path []string) {
 		visited[node.ID] = true
+		newPath := append(path, node.ID)
 
-		if len(result) <= level {
-			result = append(result, []string{})
-		}
-		result[level] = append(result[level], node.ID)
-
+		// Check if this is a leaf node (no unvisited children)
+		isLeaf := true
 		for _, edge := range db.Edges {
 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-				dfs(edge.To, level+1)
+				isLeaf = false
+				dfs(edge.To, newPath)
+			}
+		}
+
+		// If it's a leaf node, add the path to the result
+		if isLeaf {
+			result = append(result, newPath)
+		}
+
+		// Mark this node as unvisited to allow other paths to visit it
+		visited[node.ID] = false
+	}
+
+	dfs(startNode, []string{})
+	return result
+}
+
+// ~ 01 Fundamental Function Section End
+
+// ~ 02 Handler Interface Inplemetation Section
+// Init 用于初始化图数据库
+func (db *InMemoryDB) Init(yamlPath string) error {
+	// read the config yaml file from the yamlPath
+	// parse the yaml file and set the
+	// db.configPath is equal to dataPath field in the yaml file
+	// read the yaml file
+	yamlData, err := os.ReadFile(yamlPath)
+
+	if err != nil {
+		return err
+	}
+
+	// unmarshal the yaml data into a map
+	var data map[string]interface{}
+	err = yaml.Unmarshal(yamlData, &data)
+
+	if err != nil {
+		return err
+	}
+
+	// set the db.configPath
+	dataPath, ok := data["dataPath"].(string)
+	if !ok {
+		return fmt.Errorf("dataPath is not a string")
+	}
+	db.configPath = dataPath
+	return nil
+}
+
+// Connect 用于连接图数据库
+// 读取本地文件并将其内容加载到内存中
+func (db *InMemoryDB) Connect() error {
+	// read the configPath file
+	// every collection is a directory in the configPath
+	// get all the json files in each collection
+	// read the json files and check if it is a node or an edge
+	// add the node or edge to the db.Nodes or db.Edges
+
+	// get all the directories in the configPath
+	dirs, err := os.ReadDir(db.configPath)
+	if err != nil {
+		return err
+	}
+
+	// iterate over the directories
+	for _, dir := range dirs {
+		// get the name of the directory
+		collection := dir.Name()
+		// get all the files in the directory
+		files, err := os.ReadDir(filepath.Join(db.configPath, collection))
+		if err != nil {
+			return err
+		}
+
+		// iterate over the files
+		for _, file := range files {
+			// get the name of the file
+			fileName := file.Name()
+			// get the path of the file
+			filePath := filepath.Join(db.configPath, collection, fileName)
+
+			// read the file
+			data, err := ReadJSONFile(filePath)
+			if err != nil {
+				return err
+			}
+
+			// check if the file is a node or an edge
+			if _, ok := data["From"]; ok {
+				// create an edge
+				from, to := data["From"].(string), data["To"].(string)
+				tmpWeight, ok := data["Weight"].(float64)
+				if !ok {
+					tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
+				}
+
+				edge := NewEdge(
+					WithEID(data["ID"].(string)),
+					WithECollection(collection),
+					WithEFrom(db.Nodes[from]),
+					WithETo(db.Nodes[to]),
+					WithEWeight(int(tmpWeight)),
+					WithEData(data))
+				db.Edges[edge.ID] = edge
+			} else {
+				// create a node
+				node := NewNode(
+					WithNCollection(collection),
+					WithNData(data))
+				db.Nodes[node.ID] = node
 			}
 		}
 	}
+	return nil
+}
 
-	dfs(startNode, 0)
-	return result
+// Disconnect 用于断开图数据库的连接
+// 将内存中的数据写入到本地文件
+func (db *InMemoryDB) Disconnect() error {
+	// iterate over the db.Nodes
+	// write the node to the file
+	for _, node := range db.Nodes {
+		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.ID+".json"), node.Export())
+		if err != nil {
+			return err
+		}
+	}
+
+	// iterate over the db.Edges
+	// write the edge to the file
+	for _, edge := range db.Edges {
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.ID+".json"), edge.Export())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (db *InMemoryDB) AddNode(n *Node) error {
+	db.m.Lock()
+	defer db.m.Unlock()
+
+	if _, ok := db.Nodes[n.ID]; ok {
+		return fmt.Errorf("node with ID %s already exists", n.ID)
+	}
+
+	db.Nodes[n.ID] = n
+	return nil
+}
+
+func (db *InMemoryDB) AddVertex(collection string, data map[string]interface{}) (id string, err error) {
+	db.m.Lock()
+	defer db.m.Unlock()
+	defer recoverFromPanic(&err)
+
+	n := NewNode(WithNCollection(collection), WithNData(data))
+	// check if the ID is already in the Nodes
+	// if yes, merge the data
+	// if no , add the node to the Nodes
+	if _, ok := db.Nodes[n.ID]; !ok {
+		db.Nodes[n.ID] = n
+	} else {
+		db.Nodes[n.ID].Collection = n.Collection
+		db.Nodes[n.ID].Data = MergeMaps(db.Nodes[n.ID].Data, n.Data)
+
+	}
+
+	return n.ID, err
+}
+
+func (db *InMemoryDB) AddLink(e *Edge) error {
+	db.m.Lock()
+	defer db.m.Unlock()
+
+	if _, ok := db.Edges[e.ID]; ok {
+		return fmt.Errorf("edge with ID %s already exists", e.ID)
+	}
+
+	db.Edges[e.ID] = e
+	return nil
+}
+
+func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[string]interface{}) (id string, err error) {
+	db.m.Lock()
+	defer db.m.Unlock()
+	defer recoverFromPanic(&err)
+
+	// ~ check if the from and to nodes exist
+	if _, ok := db.Nodes[from]; !ok {
+		return "", fmt.Errorf("node with ID %s does not exist", from)
+	}
+	if _, ok := db.Nodes[to]; !ok {
+		return "", fmt.Errorf("node with ID %s does not exist", to)
+	}
+
+	e := NewEdge(
+		WithECollection(collection),
+		WithEFrom(db.Nodes[from]),
+		WithETo(db.Nodes[to]),
+		WithEData(data))
+	db.Edges[e.ID] = e
+
+	return e.ID, err
 }
 
 func (db *InMemoryDB) GetVertexDB(id string) (map[string]interface{}, error) {
@@ -686,6 +773,12 @@ func (db *InMemoryDB) DeleteEdge(id string) error {
 	return nil
 }
 
+// GetAllRelatedVertices retrieves all the related vertices of a given node ID.
+// It performs a breadth-first search (BFS) starting from the specified node ID and returns the vertices in levels.
+// The function acquires a read lock on the database before performing the search.
+// If the node with the specified ID does not exist in the database, it returns an error.
+// The returned value is a 2D slice where each inner slice represents a level of vertices.
+// The function returns nil and an error if the node does not exist, otherwise it returns the vertices and nil error.
 func (db *InMemoryDB) GetAllRelatedVertices(id string) ([][]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
@@ -697,40 +790,69 @@ func (db *InMemoryDB) GetAllRelatedVertices(id string) ([][]string, error) {
 	return db.BFSWithLevels(id), nil
 }
 
-// func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...string) ([][]string, error) {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
+func (db *InMemoryDB) GetAllRelatedEdges(id string) ([][]string, error) {
+	db.m.RLock()
+	defer db.m.RUnlock()
 
-// 	if _, ok := db.Nodes[id]; !ok {
-// 		return nil, fmt.Errorf("node with ID %s does not exist", id)
-// 	}
+	if _, ok := db.Nodes[id]; !ok {
+		return nil, fmt.Errorf("node with ID %s does not exist", id)
+	}
 
-// 	var result [][]string
+	var result [][]string
+	for _, edge := range db.Edges {
+		if edge.From.ID == id {
+			result = append(result, []string{"To",edge.ID, edge.To.ID})
+		}
 
-// 	for _, edge := range db.Edges {
-// 		if edge.From.ID == id {
-// 			result = append(result, edge.To.ID)
-// 		}
-// 	}
+		if edge.To.ID == id {
+			result = append(result, []string{"From", edge.ID,edge.From.ID})
+		}
 
-// 	return result, nil
-// }
+	}
 
-// func (db *InMemoryDB) GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error) {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
+	return result, nil
+}
 
-// 	if _, ok := db.Nodes[id]; !ok {
-// 		return nil, fmt.Errorf("node with ID %s does not exist", id)
-// 	}
+func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...string) ([][]string, error) {
+	db.m.RLock()
+	defer db.m.RUnlock()
 
-// 	var result [][]string
+	if _, ok := db.Nodes[id]; !ok {
+		return nil, fmt.Errorf("node with ID %s does not exist", id)
+	}
 
-// 	for _, edge := range db.Edges {
-// 		if edge.From.ID == id {
-// 			result = append(result, edge.To.ID)
-// 		}
-// 	}
+	var result [][]string
+	tmpEdges := make(map[string]*Edge)
+	// create new graph with the same nodes but only the edges in the edgeSlice
+	// iterate over the edgeSlice
+	for _, edgeID := range edgeSlice {
+		if edge, ok := db.Edges[edgeID]; ok {
+			tmpEdges[edgeID] = edge
+		} else {
+			return nil, fmt.Errorf("edge with ID %s does not exist", edgeID)
+		}
+	}
 
-// 	return result, nil
-// }
+	// new graph
+	tmpGraph := &InMemoryDB{
+		Nodes: db.Nodes,
+		Edges: tmpEdges,
+	}
+
+	result, err := tmpGraph.GetAllRelatedVertices(id)	
+	return result, err
+}
+
+func (db *InMemoryDB) GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error) {
+	var err error
+	recoverFromPanic(&err)
+	db.m.RLock()
+	defer db.m.RUnlock()
+
+	if _, ok := db.Nodes[id]; !ok {
+		return nil, fmt.Errorf("node with ID %s does not exist", id)
+	}
+
+	return db.BFSWithWeightRange(id, min, max), err
+
+}
