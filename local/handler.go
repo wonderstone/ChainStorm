@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
@@ -86,7 +87,6 @@ func recoverFromPanic(err *error) {
 
 // ~ 01 Fundamental Function Section End
 
-
 // ~ 02 Handler Interface Inplemetation Section
 // Init 用于初始化图数据库
 func (db *InMemoryDB) Init(yamlPath string) error {
@@ -117,55 +117,90 @@ func (db *InMemoryDB) Init(yamlPath string) error {
 // 读取本地文件并将其内容加载到内存中
 func (db *InMemoryDB) Connect() error {
 	// read the configPath file
-	// get all the json files in the configPath
-	// read the json files and add them to the Nodes
-	// read the json files and add them to the Edges
-	// return nil
-	files, err := os.ReadDir(db.configPath)
+	// every collection is a directory in the configPath
+	// get all the json files in each collection
+	// read the json files and check if it is a node or an edge
+	// add the node or edge to the db.Nodes or db.Edges
+
+	// get all the directories in the configPath
+	dirs, err := os.ReadDir(db.configPath)
 	if err != nil {
 		return err
 	}
 
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-
-		filePath := fmt.Sprintf("%s/%s", db.configPath, file.Name())
-		data, err := ReadJSONFile(filePath)
+	// iterate over the directories
+	for _, dir := range dirs {
+		// get the name of the directory
+		collection := dir.Name()
+		// get all the files in the directory
+		files, err := os.ReadDir(filepath.Join(db.configPath, collection))
 		if err != nil {
 			return err
 		}
 
-		if _, ok := data["From"]; ok {
-			from, ok := data["From"].(string)
-			if !ok {
-				return fmt.Errorf("invalid From field in edge %s", file.Name())
+		// iterate over the files
+		for _, file := range files {
+			// get the name of the file
+			fileName := file.Name()
+			// get the path of the file
+			filePath := filepath.Join(db.configPath, collection, fileName)
+
+			// read the file
+			data, err := ReadJSONFile(filePath)
+			if err != nil {
+				return err
 			}
 
-			to, ok := data["To"].(string)
-			if !ok {
-				return fmt.Errorf("invalid To field in edge %s", file.Name())
-			}
+			// check if the file is a node or an edge
+			if _, ok := data["From"]; ok {
+				// create an edge
+				from, to := data["From"].(string), data["To"].(string)
+				tmpWeight, ok := data["Weight"].(float64)
+				if !ok {
+					tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
+				}
 
-			db.Edges[file.Name()] = NewEdge(
-				WithECollection(data["Collection"].(string)),
-				WithEFrom(db.Nodes[from]),
-				WithETo(db.Nodes[to]),
-				WithEData(data))
-		} else {
-			db.Nodes[file.Name()] = NewNode(
-				WithNCollection(data["Collection"].(string)),
-				WithNData(data))
+				edge := NewEdge(
+					WithEID(data["ID"].(string)),
+					WithECollection(collection),
+					WithEFrom(db.Nodes[from]),
+					WithETo(db.Nodes[to]),
+					WithEWeight(int(tmpWeight)),
+					WithEData(data))
+				db.Edges[edge.ID] = edge
+			} else {
+				// create a node
+				node := NewNode(
+					WithNCollection(collection),
+					WithNData(data))
+				db.Nodes[node.ID] = node
+			}
 		}
 	}
-
 	return nil
 }
 
 // Disconnect 用于断开图数据库的连接
 // 将内存中的数据写入到本地文件
 func (db *InMemoryDB) Disconnect() error {
+	// iterate over the db.Nodes
+	// write the node to the file
+	for _, node := range db.Nodes {
+		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.ID+".json"), node.Export())
+		if err != nil {
+			return err
+		}
+	}
+
+	// iterate over the db.Edges
+	// write the edge to the file
+	for _, edge := range db.Edges {
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.ID+".json"), edge.Export())
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -268,10 +303,10 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 
 	visited := make(map[string]bool)
 	queue := []struct {
-		node         *Node
-		totalWeight  int
-		path         []string
-	}{ {node: startNode, totalWeight: 0, path: []string{startNode.ID}} }
+		node        *Node
+		totalWeight int
+		path        []string
+	}{{node: startNode, totalWeight: 0, path: []string{startNode.ID}}}
 
 	var result [][]string
 
@@ -296,9 +331,9 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 				newPath := append([]string(nil), path...)
 				newPath = append(newPath, edge.To.ID)
 				queue = append(queue, struct {
-					node         *Node
-					totalWeight  int
-					path         []string
+					node        *Node
+					totalWeight int
+					path        []string
 				}{node: edge.To, totalWeight: newWeight, path: newPath})
 			}
 		}
@@ -613,7 +648,7 @@ func (db *InMemoryDB) UpdateEdge(id, from, to string, data map[string]interface{
 	if _, ok := db.Edges[id]; !ok {
 		return fmt.Errorf("edge with ID %s does not exist", id)
 	}
-	
+
 	db.Edges[id].From = db.Nodes[from]
 	db.Edges[id].To = db.Nodes[to]
 	db.Edges[id].Data = MergeMaps(db.Edges[id].Data, data)
@@ -629,7 +664,7 @@ func (db *InMemoryDB) DeleteVertex(id string) error {
 	}
 
 	delete(db.Nodes, id)
-	
+
 	for _, e := range db.Edges {
 		if e.From.ID == id || e.To.ID == id {
 			delete(db.Edges, e.ID)
@@ -637,7 +672,7 @@ func (db *InMemoryDB) DeleteVertex(id string) error {
 	}
 
 	return nil
-}	
+}
 
 func (db *InMemoryDB) DeleteEdge(id string) error {
 	db.m.Lock()
@@ -646,7 +681,7 @@ func (db *InMemoryDB) DeleteEdge(id string) error {
 	if _, ok := db.Edges[id]; !ok {
 		return fmt.Errorf("edge with ID %s does not exist", id)
 	}
-	
+
 	delete(db.Edges, id)
 	return nil
 }
@@ -659,33 +694,12 @@ func (db *InMemoryDB) GetAllRelatedVertices(id string) ([][]string, error) {
 		return nil, fmt.Errorf("node with ID %s does not exist", id)
 	}
 
-	
-
 	return db.BFSWithLevels(id), nil
-}	
+}
 
 // func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...string) ([][]string, error) {
 // 	db.m.RLock()
 // 	defer db.m.RUnlock()
-
-// 	if _, ok := db.Nodes[id]; !ok {
-// 		return nil, fmt.Errorf("node with ID %s does not exist", id)
-// 	}	
-
-// 	var result [][]string
-
-// 	for _, edge := range db.Edges {
-// 		if edge.From.ID == id {
-// 			result = append(result, edge.To.ID)
-// 		}
-// 	}	
-
-// 	return result, nil
-// }
-
-// func (db *InMemoryDB) GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error) {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()	
 
 // 	if _, ok := db.Nodes[id]; !ok {
 // 		return nil, fmt.Errorf("node with ID %s does not exist", id)
@@ -694,12 +708,29 @@ func (db *InMemoryDB) GetAllRelatedVertices(id string) ([][]string, error) {
 // 	var result [][]string
 
 // 	for _, edge := range db.Edges {
-// 		if edge.From.ID == id {	
+// 		if edge.From.ID == id {
 // 			result = append(result, edge.To.ID)
 // 		}
-// 	}	
+// 	}
 
 // 	return result, nil
 // }
 
-	
+// func (db *InMemoryDB) GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error) {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
+
+// 	if _, ok := db.Nodes[id]; !ok {
+// 		return nil, fmt.Errorf("node with ID %s does not exist", id)
+// 	}
+
+// 	var result [][]string
+
+// 	for _, edge := range db.Edges {
+// 		if edge.From.ID == id {
+// 			result = append(result, edge.To.ID)
+// 		}
+// 	}
+
+// 	return result, nil
+// }

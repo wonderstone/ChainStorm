@@ -71,9 +71,11 @@ func TestNewEdge(t *testing.T) {
 		for _, node2 := range nodes {
 			if node.ID != node2.ID {
 				edge := NewEdge(
+					WithEID(node.ID + "-" + node2.ID),
 					WithECollection("invest"), 
 					WithEFrom(node), 
 					WithETo(node2), 
+					WithEWeight(1),
 					WithEData(map[string]interface{}{}))
 				// write the edge to the file
 				err := WriteJSONFile(filepath.Join("data", "invest", edge.ID+".json"), edge.Export())
@@ -94,29 +96,21 @@ func TestInMemoryDB(t *testing.T) {
 	db := NewInMemoryDB()
 	fp := filepath.Join("config", "config.yaml")
 	db.Init(fp)
-
-	// create a new node
-	collection := "company"
-
-	node := NewNode(
-		WithNCollection(collection),
-		WithNData(map[string]interface{}{
-			"companyName":      "Google",
-			"companyEmployees": 1000,
-		}))
-
-	tmpdb := map[string]interface{}{
-		"ID":               "600021",
-		"companyEmployees": 2000,
+	// connect to the database
+	err := db.Connect()
+	if err != nil {
+		t.Error(err)
 	}
 
-	db.AddVertex(collection, node.Data)
-	db.AddVertex(collection, tmpdb)
+	// disconnect from the database
+	err = db.Disconnect()
+	if err != nil {
+		t.Error(err)
+	}
 
-	dp := filepath.Join("data", "company", "600001.json")
-	dt, _ := ReadJSONFile(dp)
 
-	db.AddVertex(collection, dt)
+
+
 
 }
 
