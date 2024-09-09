@@ -17,7 +17,7 @@ func TestNewNode(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	node := NewNode(WithNCollection("company"), WithNData(dt))
+	node,_ := NewNode(WithNCollection("company"), WithNData(dt))
 	// Check if the node is created correctly
 	assert.Equal(t, "600001", node.ID)
 	// add node companyEmployees field by 1 and assign back to it
@@ -31,7 +31,7 @@ func TestNewNode(t *testing.T) {
 	// based on the node, create 10 new nodes in the same collection
 	// every new node change the "ID" field to a new value
 	for i := 0; i < 10; i++ {
-		node := NewNode(WithNCollection("company"), WithNData(dt))
+		node,_ := NewNode(WithNCollection("company"), WithNData(dt))
 		node.Data["ID"] = "60000" + strconv.Itoa(i)
 		node.ID = "60000" + strconv.Itoa(i)
 		// write the node back to the json file
@@ -64,14 +64,14 @@ func TestNewEdge(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		node := NewNode(WithNCollection("company"), WithNData(dt))
+		node,_ := NewNode(WithNCollection("company"), WithNData(dt))
 		nodes[node.ID] = node
 	}
 	// create edges between the nodes
 	for _, node := range nodes {
 		for _, node2 := range nodes {
 			if node.ID != node2.ID {
-				edge := NewEdge(
+				edge,_ := NewEdge(
 					WithEID(node.ID + "-" + node2.ID),
 					WithECollection("invest"), 
 					WithEFrom(node), 

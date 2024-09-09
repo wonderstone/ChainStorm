@@ -499,19 +499,28 @@ func (db *InMemoryDB) Connect() error {
 					tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
 				}
 
-				edge := NewEdge(
+				edge,err := NewEdge(
 					WithEID(data["ID"].(string)),
 					WithECollection(collection),
 					WithEFrom(db.Nodes[from]),
 					WithETo(db.Nodes[to]),
 					WithEWeight(int(tmpWeight)),
 					WithEData(data))
+				
+				if err != nil {
+					return err
+				}
+
 				db.Edges[edge.ID] = edge
 			} else {
 				// create a node
-				node := NewNode(
+				node,err := NewNode(
 					WithNCollection(collection),
 					WithNData(data))
+				if err != nil {
+					return err
+				}
+
 				db.Nodes[node.ID] = node
 			}
 		}
@@ -560,7 +569,11 @@ func (db *InMemoryDB) AddVertex(collection string, data map[string]interface{}) 
 	defer db.m.Unlock()
 	defer recoverFromPanic(&err)
 
-	n := NewNode(WithNCollection(collection), WithNData(data))
+	n,err := NewNode(WithNCollection(collection), WithNData(data))
+	if err != nil {
+		return "", err
+	}
+
 	// check if the ID is already in the Nodes
 	// if yes, merge the data
 	// if no , add the node to the Nodes
@@ -600,11 +613,16 @@ func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[strin
 		return "", fmt.Errorf("node with ID %s does not exist", to)
 	}
 
-	e := NewEdge(
+	e,err := NewEdge(
 		WithECollection(collection),
+
 		WithEFrom(db.Nodes[from]),
 		WithETo(db.Nodes[to]),
 		WithEData(data))
+	if err != nil {
+		return "", err
+	}
+	
 	db.Edges[e.ID] = e
 
 	return e.ID, err
