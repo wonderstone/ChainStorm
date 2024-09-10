@@ -1,9 +1,10 @@
 {
   "Collection": "company",
-  "ID": "600001",
+  "ID": "b8a8bbbd-17d4-45e6-a3fb-202707b755f0",
+  "Name": "600001",
   "companyAddress": "123 Main Street",
   "companyCity": "New York",
   "companyCountry": "USA",
-  "companyEmployees": 1074,
+  "companyEmployees": 1151,
   "companyRevenue": 1000000
 }

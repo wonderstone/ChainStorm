@@ -179,198 +179,198 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 	return result
 }
 
-// NodeWithLevel 表示一个节点及其在 BFS 中的层次
-type NodeWithLevel struct {
-	Node  *Node // 图中的节点
-	Level int   // 节点所在的层次
-}
+// // NodeWithLevel 表示一个节点及其在 BFS 中的层次
+// type NodeWithLevel struct {
+// 	Node  *Node // 图中的节点
+// 	Level int   // 节点所在的层次
+// }
 
-// BFSWithLevelsStruct 实现广度优先搜索并返回每个节点及其层次
-func (db *InMemoryDB) BFSWithLevelsStruct(startID string) []NodeWithLevel {
-	db.m.RLock()
-	defer db.m.RUnlock()
+// // BFSWithLevelsStruct 实现广度优先搜索并返回每个节点及其层次
+// func (db *InMemoryDB) BFSWithLevelsStruct(startID string) []NodeWithLevel {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
 
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
+// 	startNode, exists := db.Nodes[startID]
+// 	if !exists {
+// 		return nil
+// 	}
 
-	visited := make(map[string]bool)
-	queue := []NodeWithLevel{{Node: startNode, Level: 0}}
-	var result []NodeWithLevel
+// 	visited := make(map[string]bool)
+// 	queue := []NodeWithLevel{{Node: startNode, Level: 0}}
+// 	var result []NodeWithLevel
 
-	for len(queue) > 0 {
-		nodeWithLevel := queue[0]
-		queue = queue[1:]
+// 	for len(queue) > 0 {
+// 		nodeWithLevel := queue[0]
+// 		queue = queue[1:]
 
-		if !visited[nodeWithLevel.Node.ID] {
-			result = append(result, nodeWithLevel)
-			visited[nodeWithLevel.Node.ID] = true
+// 		if !visited[nodeWithLevel.Node.ID] {
+// 			result = append(result, nodeWithLevel)
+// 			visited[nodeWithLevel.Node.ID] = true
 
-			for _, edge := range db.Edges {
-				if edge.From.ID == nodeWithLevel.Node.ID && !visited[edge.To.ID] {
-					queue = append(queue, NodeWithLevel{Node: edge.To, Level: nodeWithLevel.Level + 1})
-				}
-			}
-		}
-	}
+// 			for _, edge := range db.Edges {
+// 				if edge.From.ID == nodeWithLevel.Node.ID && !visited[edge.To.ID] {
+// 					queue = append(queue, NodeWithLevel{Node: edge.To, Level: nodeWithLevel.Level + 1})
+// 				}
+// 			}
+// 		}
+// 	}
 
-	return result
-}
+// 	return result
+// }
 
-// NodeWithPath 表示一个节点及其从起始节点到该节点的路径
-type NodeWithPath struct {
-	Node *Node    // 当前节点
-	Path []string // 从起始节点到该节点的路径
-}
+// // NodeWithPath 表示一个节点及其从起始节点到该节点的路径
+// type NodeWithPath struct {
+// 	Node *Node    // 当前节点
+// 	Path []string // 从起始节点到该节点的路径
+// }
 
-// BFSWithPaths 实现广度优先搜索并返回每个节点及其路径
-func (db *InMemoryDB) BFSWithPaths(startID string) []NodeWithPath {
-	db.m.RLock()
-	defer db.m.RUnlock()
+// // BFSWithPaths 实现广度优先搜索并返回每个节点及其路径
+// func (db *InMemoryDB) BFSWithPaths(startID string) []NodeWithPath {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
 
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
+// 	startNode, exists := db.Nodes[startID]
+// 	if !exists {
+// 		return nil
+// 	}
 
-	visited := make(map[string]bool)
-	queue := []NodeWithPath{{Node: startNode, Path: []string{startID}}}
-	var result []NodeWithPath
+// 	visited := make(map[string]bool)
+// 	queue := []NodeWithPath{{Node: startNode, Path: []string{startID}}}
+// 	var result []NodeWithPath
 
-	for len(queue) > 0 {
-		nodeWithPath := queue[0]
-		queue = queue[1:]
+// 	for len(queue) > 0 {
+// 		nodeWithPath := queue[0]
+// 		queue = queue[1:]
 
-		if !visited[nodeWithPath.Node.ID] {
-			result = append(result, nodeWithPath)
-			visited[nodeWithPath.Node.ID] = true
+// 		if !visited[nodeWithPath.Node.ID] {
+// 			result = append(result, nodeWithPath)
+// 			visited[nodeWithPath.Node.ID] = true
 
-			for _, edge := range db.Edges {
-				if edge.From.ID == nodeWithPath.Node.ID && !visited[edge.To.ID] {
-					newPath := append([]string{}, nodeWithPath.Path...)
-					newPath = append(newPath, edge.To.ID)
-					queue = append(queue, NodeWithPath{Node: edge.To, Path: newPath})
-				}
-			}
-		}
-	}
+// 			for _, edge := range db.Edges {
+// 				if edge.From.ID == nodeWithPath.Node.ID && !visited[edge.To.ID] {
+// 					newPath := append([]string{}, nodeWithPath.Path...)
+// 					newPath = append(newPath, edge.To.ID)
+// 					queue = append(queue, NodeWithPath{Node: edge.To, Path: newPath})
+// 				}
+// 			}
+// 		}
+// 	}
 
-	return result
-}
+// 	return result
+// }
 
-// DFSResult represents the result of a DFS traversal
-type DFSResult struct {
-	NodeID string
-	Path   []string
-	Level  int
-}
+// // DFSResult represents the result of a DFS traversal
+// type DFSResult struct {
+// 	NodeID string
+// 	Path   []string
+// 	Level  int
+// }
 
-// DFS 实现深度优先搜索
-func (db *InMemoryDB) DFS(startID string) []DFSResult {
-	db.m.RLock()
-	defer db.m.RUnlock()
+// // DFS 实现深度优先搜索
+// func (db *InMemoryDB) DFS(startID string) []DFSResult {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
 
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
+// 	startNode, exists := db.Nodes[startID]
+// 	if !exists {
+// 		return nil
+// 	}
 
-	var result []DFSResult
-	visited := make(map[string]bool)
-	var path []string
+// 	var result []DFSResult
+// 	visited := make(map[string]bool)
+// 	var path []string
 
-	var dfs func(node *Node, level int)
-	dfs = func(node *Node, level int) {
-		if visited[node.ID] {
-			return
-		}
-		visited[node.ID] = true
-		path = append(path, node.ID)
+// 	var dfs func(node *Node, level int)
+// 	dfs = func(node *Node, level int) {
+// 		if visited[node.ID] {
+// 			return
+// 		}
+// 		visited[node.ID] = true
+// 		path = append(path, node.ID)
 
-		// Create a copy of the current path to store in the result
-		pathCopy := make([]string, len(path))
-		copy(pathCopy, path)
-		result = append(result, DFSResult{NodeID: node.ID, Path: pathCopy, Level: level})
+// 		// Create a copy of the current path to store in the result
+// 		pathCopy := make([]string, len(path))
+// 		copy(pathCopy, path)
+// 		result = append(result, DFSResult{NodeID: node.ID, Path: pathCopy, Level: level})
 
-		for _, edge := range db.Edges {
-			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-				dfs(edge.To, level+1)
-			}
-		}
+// 		for _, edge := range db.Edges {
+// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
+// 				dfs(edge.To, level+1)
+// 			}
+// 		}
 
-		// Backtrack
-		path = path[:len(path)-1]
-	}
+// 		// Backtrack
+// 		path = path[:len(path)-1]
+// 	}
 
-	dfs(startNode, 0)
-	return result
-}
+// 	dfs(startNode, 0)
+// 	return result
+// }
 
-// DFSWithLevelsStruct 实现深度优先搜索并返回每个节点及其层次
-func (db *InMemoryDB) DFSWithLevelsStruct(startID string) []NodeWithLevel {
-	db.m.RLock()
-	defer db.m.RUnlock()
+// // DFSWithLevelsStruct 实现深度优先搜索并返回每个节点及其层次
+// func (db *InMemoryDB) DFSWithLevelsStruct(startID string) []NodeWithLevel {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
 
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
+// 	startNode, exists := db.Nodes[startID]
+// 	if !exists {
+// 		return nil
+// 	}
 
-	var result []NodeWithLevel
-	visited := make(map[string]bool)
+// 	var result []NodeWithLevel
+// 	visited := make(map[string]bool)
 
-	var dfs func(node *Node, level int)
-	dfs = func(node *Node, level int) {
-		if visited[node.ID] {
-			return
-		}
-		visited[node.ID] = true
-		result = append(result, NodeWithLevel{Node: node, Level: level})
+// 	var dfs func(node *Node, level int)
+// 	dfs = func(node *Node, level int) {
+// 		if visited[node.ID] {
+// 			return
+// 		}
+// 		visited[node.ID] = true
+// 		result = append(result, NodeWithLevel{Node: node, Level: level})
 
-		for _, edge := range db.Edges {
-			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-				dfs(edge.To, level+1)
-			}
-		}
-	}
+// 		for _, edge := range db.Edges {
+// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
+// 				dfs(edge.To, level+1)
+// 			}
+// 		}
+// 	}
 
-	dfs(startNode, 0)
-	return result
-}
+// 	dfs(startNode, 0)
+// 	return result
+// }
 
-// DFSWithPaths 实现深度优先搜索并返回每个节点及其路径
-func (db *InMemoryDB) DFSWithPaths(startID string) []NodeWithPath {
-	db.m.RLock()
-	defer db.m.RUnlock()
+// // DFSWithPaths 实现深度优先搜索并返回每个节点及其路径
+// func (db *InMemoryDB) DFSWithPaths(startID string) []NodeWithPath {
+// 	db.m.RLock()
+// 	defer db.m.RUnlock()
 
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
+// 	startNode, exists := db.Nodes[startID]
+// 	if !exists {
+// 		return nil
+// 	}
 
-	var result []NodeWithPath
-	visited := make(map[string]bool)
+// 	var result []NodeWithPath
+// 	visited := make(map[string]bool)
 
-	var dfs func(node *Node, path []string)
-	dfs = func(node *Node, path []string) {
-		if visited[node.ID] {
-			return
-		}
-		visited[node.ID] = true
-		newPath := append(path, node.ID)
-		result = append(result, NodeWithPath{Node: node, Path: newPath})
+// 	var dfs func(node *Node, path []string)
+// 	dfs = func(node *Node, path []string) {
+// 		if visited[node.ID] {
+// 			return
+// 		}
+// 		visited[node.ID] = true
+// 		newPath := append(path, node.ID)
+// 		result = append(result, NodeWithPath{Node: node, Path: newPath})
 
-		for _, edge := range db.Edges {
-			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-				dfs(edge.To, newPath)
-			}
-		}
-	}
+// 		for _, edge := range db.Edges {
+// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
+// 				dfs(edge.To, newPath)
+// 			}
+// 		}
+// 	}
 
-	dfs(startNode, []string{})
-	return result
-}
+// 	dfs(startNode, []string{})
+// 	return result
+// }
 
 // DFSWithCompletePaths performs a depth-first search starting from the specified node ID and returns a list of complete paths.
 // A complete path is a sequence of node IDs from the starting node to a leaf node, where a leaf node is a node with no unvisited children.
@@ -469,62 +469,76 @@ func (db *InMemoryDB) Connect() error {
 
 	// iterate over the directories
 	for _, dir := range dirs {
-		// get the name of the directory
-		collection := dir.Name()
-		// get all the files in the directory
-		files, err := os.ReadDir(filepath.Join(db.configPath, collection))
-		if err != nil {
-			return err
-		}
-
-		// iterate over the files
-		for _, file := range files {
-			// get the name of the file
-			fileName := file.Name()
-			// get the path of the file
-			filePath := filepath.Join(db.configPath, collection, fileName)
-
-			// read the file
-			data, err := ReadJSONFile(filePath)
+		// check if the directory is a directory
+		if !dir.IsDir() {
+			// InMemoryDB.json file is just for other query
+			// the node and edge files are dominant in creating the graph
+		} else {
+			// get the name of the directory
+			collection := dir.Name()
+			// get all the files in the directory
+			files, err := os.ReadDir(filepath.Join(db.configPath, collection))
 			if err != nil {
 				return err
 			}
 
-			// check if the file is a node or an edge
-			if _, ok := data["From"]; ok {
-				// create an edge
-				from, to := data["From"].(string), data["To"].(string)
-				tmpWeight, ok := data["Weight"].(float64)
-				if !ok {
-					tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
-				}
+			// iterate over the files
+			for _, file := range files {
+				// get the name of the file
+				fileName := file.Name()
+				// get the path of the file
+				filePath := filepath.Join(db.configPath, collection, fileName)
 
-				edge,err := NewEdge(
-					WithEID(data["ID"].(string)),
-					WithECollection(collection),
-					WithEFrom(db.Nodes[from]),
-					WithETo(db.Nodes[to]),
-					WithEWeight(int(tmpWeight)),
-					WithEData(data))
-				
+				// read the file
+				data, err := ReadJSONFile(filePath)
 				if err != nil {
 					return err
 				}
 
-				db.Edges[edge.ID] = edge
-			} else {
-				// create a node
-				node,err := NewNode(
-					WithNCollection(collection),
-					WithNData(data))
-				if err != nil {
-					return err
-				}
+				// check if the file is a node or an edge
+				if _, ok := data["From"]; ok {
+					// create an edge
+					from, to := data["From"].(string), data["To"].(string)
+					tmpWeight, ok := data["Weight"].(float64)
+					if !ok {
+						tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
+					}
 
-				db.Nodes[node.ID] = node
+					edge, err := NewEdge(
+						WithEID(data["ID"].(string)),
+						WithEName(data["Name"].(string)),
+						WithECollection(collection), // should be the same as the data["Collection"] field
+						WithEFrom(db.Nodes[from]),
+						WithETo(db.Nodes[to]),
+						WithEWeight(int(tmpWeight)),
+						WithEData(data))
+
+					if err != nil {
+						return err
+					}
+
+					db.Edges[edge.ID] = edge
+					// add the edge id and name to the bidimap
+					db.EdgeNameMap.Put(edge.ID, edge.Name)
+				} else {
+					// create a node
+					node, err := NewNode(
+						WithNID(data["ID"].(string)),
+						WithNName(data["Name"].(string)),
+						WithNCollection(collection),
+						WithNData(data))
+					if err != nil {
+						return err
+					}
+
+					db.Nodes[node.ID] = node
+					// add the node id and name to the bidimap
+					db.NodeNameMap.Put(node.ID, node.Name)
+				}
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -534,7 +548,7 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Nodes
 	// write the node to the file
 	for _, node := range db.Nodes {
-		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.ID+".json"), node.Export())
+		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
 		if err != nil {
 			return err
 		}
@@ -543,10 +557,16 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Edges
 	// write the edge to the file
 	for _, edge := range db.Edges {
-		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.ID+".json"), edge.Export())
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
 		if err != nil {
 			return err
 		}
+	}
+
+	// output hte NodeNameMap and EdgeNameMap to the file
+	err := WriteJSONFile(filepath.Join(db.configPath, "InMemoryDB.json"), db.Export())
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -569,7 +589,7 @@ func (db *InMemoryDB) AddVertex(collection string, data map[string]interface{}) 
 	defer db.m.Unlock()
 	defer recoverFromPanic(&err)
 
-	n,err := NewNode(WithNCollection(collection), WithNData(data))
+	n, err := NewNode(WithNCollection(collection), WithNData(data))
 	if err != nil {
 		return "", err
 	}
@@ -613,7 +633,7 @@ func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[strin
 		return "", fmt.Errorf("node with ID %s does not exist", to)
 	}
 
-	e,err := NewEdge(
+	e, err := NewEdge(
 		WithECollection(collection),
 
 		WithEFrom(db.Nodes[from]),
@@ -622,11 +642,37 @@ func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[strin
 	if err != nil {
 		return "", err
 	}
-	
+
 	db.Edges[e.ID] = e
 
 	return e.ID, err
 }
+
+// get node id with the node name, regexp function is used
+// regStr is the str to build regular expression 
+// targetStr is the string to be matched
+type regexpFunc func(targetStr string, regStr string) bool
+
+func (db *InMemoryDB) GetNodeIDs(SearchChars string, regfunc regexpFunc) ([]string, error) {
+	db.m.RLock()
+	defer db.m.RUnlock()
+
+	var result []string
+	for _, k := range db.NodeNameMap.Values() {
+		if regfunc(k.(string), SearchChars) {
+			key, found := db.NodeNameMap.GetKey(k)
+			if found {
+				result = append(result, key.(string))
+			}
+		} else {
+			continue
+		}
+
+	}
+
+	return result, nil
+}
+
 
 func (db *InMemoryDB) GetVertexDB(id string) (map[string]interface{}, error) {
 	db.m.RLock()
@@ -819,11 +865,11 @@ func (db *InMemoryDB) GetAllRelatedEdges(id string) ([][]string, error) {
 	var result [][]string
 	for _, edge := range db.Edges {
 		if edge.From.ID == id {
-			result = append(result, []string{"To",edge.ID, edge.To.ID})
+			result = append(result, []string{"To", edge.ID, edge.To.ID})
 		}
 
 		if edge.To.ID == id {
-			result = append(result, []string{"From", edge.ID,edge.From.ID})
+			result = append(result, []string{"From", edge.ID, edge.From.ID})
 		}
 
 	}
@@ -857,7 +903,7 @@ func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...s
 		Edges: tmpEdges,
 	}
 
-	result, err := tmpGraph.GetAllRelatedVertices(id)	
+	result, err := tmpGraph.GetAllRelatedVertices(id)
 	return result, err
 }
 

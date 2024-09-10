@@ -254,4 +254,46 @@ func NewInMemoryDB() *InMemoryDB {
 	}
 }
 
+// Export 用于导出NodeNameMap 和 EdgeNameMap 的数据 in json format
+func (db *InMemoryDB) Export() map[string]interface{} {
+	tmp := make(map[string]interface{})
+	// iter all the nodes in the NodeNameMap and output the key and data pair in json
+	nodeNameMap := make(map[string]string, 0)
+	for _, k := range db.NodeNameMap.Keys() {
+		v, _ := db.NodeNameMap.Get(k)
+		nodeNameMap[k.(string)] = v.(string)
+	}
+	tmp["NodeNameMap"] = nodeNameMap
+
+
+	// iter all the edges in the EdgeNameMap and output the key and data pair in json
+	edgeNameMap := make(map[string]string, 0)
+	for _, k := range db.EdgeNameMap.Keys() {
+		v, _ := db.EdgeNameMap.Get(k)
+		edgeNameMap[k.(string)] = v.(string)
+	}
+
+	tmp["EdgeNameMap"] = edgeNameMap
+
+
+	return tmp
+}
+
+// Import 用于导入NodeNameMap 和 EdgeNameMap 的数据 in json format
+func (db *InMemoryDB) Import(data map[string]interface{}) {
+	// import the NodeNameMap data
+	nodeNameMap := data["NodeNameMap"].(map[string]interface{})
+	for k, v := range nodeNameMap {
+		db.NodeNameMap.Put(k, v)
+	}
+
+	// import the EdgeNameMap data
+	edgeNameMap := data["EdgeNameMap"].(map[string]interface{})
+	for k, v := range edgeNameMap {
+		db.EdgeNameMap.Put(k, v)
+	}
+
+}
+
+
 // ~ GraphDB Definition Section END

@@ -20,7 +20,10 @@ Graph has vertex(node) and edge component type.
 	Nodes      map[string]*Node
 	Edges      map[string]*Edge 
 	m          sync.RWMutex 
-	configPath string       
+	configPath string     
+
+	NodeNameMap *hashbidimap.Map
+	EdgeNameMap *hashbidimap.Map  
 
 
 
