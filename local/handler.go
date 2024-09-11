@@ -1,63 +1,16 @@
 package local
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 
+	"github.com/wonderstone/chainstorm/base"
 	"gopkg.in/yaml.v3"
 )
 
 // ~ 01 Fundamental Function Section
-// ReadJSONFile reads a JSON file and returns its contents as a map
-func ReadJSONFile(filePath string) (map[string]interface{}, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	byteValue, err := io.ReadAll(file)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	err = json.Unmarshal(byteValue, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func WriteJSONFile(filePath string, data interface{}) error {
-	// check the filePath dir is exist. if not, create dir
-	dir := filepath.Dir(filePath)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	// Open the file for writing, create it if it doesn't exist
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Encode the data to JSON and write it to the file
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ") // Optional: for pretty-printing
-	if err := encoder.Encode(data); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // MergeMaps merges two maps and returns the result
 func MergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
@@ -97,7 +50,7 @@ func (db *InMemoryDB) BFSWithLevels(startID string) [][]string {
 	}
 
 	visited := make(map[string]bool)
-	queue := []*Node{startNode}
+	queue := []*base.Node{startNode}
 	var result [][]string
 
 	for len(queue) > 0 {
@@ -140,7 +93,7 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 
 	visited := make(map[string]bool)
 	queue := []struct {
-		node        *Node
+		node        *base.Node
 		totalWeight int
 		path        []string
 	}{{node: startNode, totalWeight: 0, path: []string{startNode.ID}}}
@@ -168,7 +121,7 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 				newPath := append([]string(nil), path...)
 				newPath = append(newPath, edge.To.ID)
 				queue = append(queue, struct {
-					node        *Node
+					node        *base.Node
 					totalWeight int
 					path        []string
 				}{node: edge.To, totalWeight: newWeight, path: newPath})
@@ -179,246 +132,6 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 	return result
 }
 
-// // NodeWithLevel 表示一个节点及其在 BFS 中的层次
-// type NodeWithLevel struct {
-// 	Node  *Node // 图中的节点
-// 	Level int   // 节点所在的层次
-// }
-
-// // BFSWithLevelsStruct 实现广度优先搜索并返回每个节点及其层次
-// func (db *InMemoryDB) BFSWithLevelsStruct(startID string) []NodeWithLevel {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
-
-// 	startNode, exists := db.Nodes[startID]
-// 	if !exists {
-// 		return nil
-// 	}
-
-// 	visited := make(map[string]bool)
-// 	queue := []NodeWithLevel{{Node: startNode, Level: 0}}
-// 	var result []NodeWithLevel
-
-// 	for len(queue) > 0 {
-// 		nodeWithLevel := queue[0]
-// 		queue = queue[1:]
-
-// 		if !visited[nodeWithLevel.Node.ID] {
-// 			result = append(result, nodeWithLevel)
-// 			visited[nodeWithLevel.Node.ID] = true
-
-// 			for _, edge := range db.Edges {
-// 				if edge.From.ID == nodeWithLevel.Node.ID && !visited[edge.To.ID] {
-// 					queue = append(queue, NodeWithLevel{Node: edge.To, Level: nodeWithLevel.Level + 1})
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	return result
-// }
-
-// // NodeWithPath 表示一个节点及其从起始节点到该节点的路径
-// type NodeWithPath struct {
-// 	Node *Node    // 当前节点
-// 	Path []string // 从起始节点到该节点的路径
-// }
-
-// // BFSWithPaths 实现广度优先搜索并返回每个节点及其路径
-// func (db *InMemoryDB) BFSWithPaths(startID string) []NodeWithPath {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
-
-// 	startNode, exists := db.Nodes[startID]
-// 	if !exists {
-// 		return nil
-// 	}
-
-// 	visited := make(map[string]bool)
-// 	queue := []NodeWithPath{{Node: startNode, Path: []string{startID}}}
-// 	var result []NodeWithPath
-
-// 	for len(queue) > 0 {
-// 		nodeWithPath := queue[0]
-// 		queue = queue[1:]
-
-// 		if !visited[nodeWithPath.Node.ID] {
-// 			result = append(result, nodeWithPath)
-// 			visited[nodeWithPath.Node.ID] = true
-
-// 			for _, edge := range db.Edges {
-// 				if edge.From.ID == nodeWithPath.Node.ID && !visited[edge.To.ID] {
-// 					newPath := append([]string{}, nodeWithPath.Path...)
-// 					newPath = append(newPath, edge.To.ID)
-// 					queue = append(queue, NodeWithPath{Node: edge.To, Path: newPath})
-// 				}
-// 			}
-// 		}
-// 	}
-
-// 	return result
-// }
-
-// // DFSResult represents the result of a DFS traversal
-// type DFSResult struct {
-// 	NodeID string
-// 	Path   []string
-// 	Level  int
-// }
-
-// // DFS 实现深度优先搜索
-// func (db *InMemoryDB) DFS(startID string) []DFSResult {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
-
-// 	startNode, exists := db.Nodes[startID]
-// 	if !exists {
-// 		return nil
-// 	}
-
-// 	var result []DFSResult
-// 	visited := make(map[string]bool)
-// 	var path []string
-
-// 	var dfs func(node *Node, level int)
-// 	dfs = func(node *Node, level int) {
-// 		if visited[node.ID] {
-// 			return
-// 		}
-// 		visited[node.ID] = true
-// 		path = append(path, node.ID)
-
-// 		// Create a copy of the current path to store in the result
-// 		pathCopy := make([]string, len(path))
-// 		copy(pathCopy, path)
-// 		result = append(result, DFSResult{NodeID: node.ID, Path: pathCopy, Level: level})
-
-// 		for _, edge := range db.Edges {
-// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-// 				dfs(edge.To, level+1)
-// 			}
-// 		}
-
-// 		// Backtrack
-// 		path = path[:len(path)-1]
-// 	}
-
-// 	dfs(startNode, 0)
-// 	return result
-// }
-
-// // DFSWithLevelsStruct 实现深度优先搜索并返回每个节点及其层次
-// func (db *InMemoryDB) DFSWithLevelsStruct(startID string) []NodeWithLevel {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
-
-// 	startNode, exists := db.Nodes[startID]
-// 	if !exists {
-// 		return nil
-// 	}
-
-// 	var result []NodeWithLevel
-// 	visited := make(map[string]bool)
-
-// 	var dfs func(node *Node, level int)
-// 	dfs = func(node *Node, level int) {
-// 		if visited[node.ID] {
-// 			return
-// 		}
-// 		visited[node.ID] = true
-// 		result = append(result, NodeWithLevel{Node: node, Level: level})
-
-// 		for _, edge := range db.Edges {
-// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-// 				dfs(edge.To, level+1)
-// 			}
-// 		}
-// 	}
-
-// 	dfs(startNode, 0)
-// 	return result
-// }
-
-// // DFSWithPaths 实现深度优先搜索并返回每个节点及其路径
-// func (db *InMemoryDB) DFSWithPaths(startID string) []NodeWithPath {
-// 	db.m.RLock()
-// 	defer db.m.RUnlock()
-
-// 	startNode, exists := db.Nodes[startID]
-// 	if !exists {
-// 		return nil
-// 	}
-
-// 	var result []NodeWithPath
-// 	visited := make(map[string]bool)
-
-// 	var dfs func(node *Node, path []string)
-// 	dfs = func(node *Node, path []string) {
-// 		if visited[node.ID] {
-// 			return
-// 		}
-// 		visited[node.ID] = true
-// 		newPath := append(path, node.ID)
-// 		result = append(result, NodeWithPath{Node: node, Path: newPath})
-
-// 		for _, edge := range db.Edges {
-// 			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-// 				dfs(edge.To, newPath)
-// 			}
-// 		}
-// 	}
-
-// 	dfs(startNode, []string{})
-// 	return result
-// }
-
-// DFSWithCompletePaths performs a depth-first search starting from the specified node ID and returns a list of complete paths.
-// A complete path is a sequence of node IDs from the starting node to a leaf node, where a leaf node is a node with no unvisited children.
-// If the starting node does not exist in the database, it returns nil.
-//
-// Parameters:
-// - startID: The ID of the starting node for the depth-first search.
-//
-// Returns:
-// - [][]string: A list of complete paths, where each path is represented as a slice of node IDs.
-func (db *InMemoryDB) DFSWithCompletePaths(startID string) [][]string {
-	db.m.RLock()
-	defer db.m.RUnlock()
-
-	startNode, exists := db.Nodes[startID]
-	if !exists {
-		return nil
-	}
-
-	var result [][]string
-	visited := make(map[string]bool)
-
-	var dfs func(node *Node, path []string)
-	dfs = func(node *Node, path []string) {
-		visited[node.ID] = true
-		newPath := append(path, node.ID)
-
-		// Check if this is a leaf node (no unvisited children)
-		isLeaf := true
-		for _, edge := range db.Edges {
-			if edge.From.ID == node.ID && !visited[edge.To.ID] {
-				isLeaf = false
-				dfs(edge.To, newPath)
-			}
-		}
-
-		// If it's a leaf node, add the path to the result
-		if isLeaf {
-			result = append(result, newPath)
-		}
-
-		// Mark this node as unvisited to allow other paths to visit it
-		visited[node.ID] = false
-	}
-
-	dfs(startNode, []string{})
-	return result
-}
 
 // ~ 01 Fundamental Function Section End
 
@@ -490,7 +203,7 @@ func (db *InMemoryDB) Connect() error {
 				filePath := filepath.Join(db.configPath, collection, fileName)
 
 				// read the file
-				data, err := ReadJSONFile(filePath)
+				data, err := base.ReadJSONFile(filePath)
 				if err != nil {
 					return err
 				}
@@ -504,14 +217,14 @@ func (db *InMemoryDB) Connect() error {
 						tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
 					}
 
-					edge, err := NewEdge(
-						WithEID(data["ID"].(string)),
-						WithEName(data["Name"].(string)),
-						WithECollection(collection), // should be the same as the data["Collection"] field
-						WithEFrom(db.Nodes[from]),
-						WithETo(db.Nodes[to]),
-						WithEWeight(int(tmpWeight)),
-						WithEData(data))
+					edge, err := base.NewEdge(
+						base.WithEID(data["ID"].(string)),
+						base.WithEName(data["Name"].(string)),
+						base.WithECollection(collection), // should be the same as the data["Collection"] field
+						base.WithEFrom(db.Nodes[from]),
+						base.WithETo(db.Nodes[to]),
+						base.WithEWeight(int(tmpWeight)),
+						base.WithEData(data))
 
 					if err != nil {
 						return err
@@ -522,11 +235,11 @@ func (db *InMemoryDB) Connect() error {
 					db.EdgeNameMap.Put(edge.ID, edge.Name)
 				} else {
 					// create a node
-					node, err := NewNode(
-						WithNID(data["ID"].(string)),
-						WithNName(data["Name"].(string)),
-						WithNCollection(collection),
-						WithNData(data))
+					node, err := base.NewNode(
+						base.WithNID(data["ID"].(string)),
+						base.WithNName(data["Name"].(string)),
+						base.WithNCollection(collection),
+						base.WithNData(data))
 					if err != nil {
 						return err
 					}
@@ -548,7 +261,7 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Nodes
 	// write the node to the file
 	for _, node := range db.Nodes {
-		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
+		err := base.WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
 		if err != nil {
 			return err
 		}
@@ -557,14 +270,14 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Edges
 	// write the edge to the file
 	for _, edge := range db.Edges {
-		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
+		err := base.WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
 		if err != nil {
 			return err
 		}
 	}
 
 	// output hte NodeNameMap and EdgeNameMap to the file
-	err := WriteJSONFile(filepath.Join(db.configPath, "InMemoryDB.json"), db.Export())
+	err := base.WriteJSONFile(filepath.Join(db.configPath, "InMemoryDB.json"), db.Export())
 	if err != nil {
 		return err
 	}
@@ -572,81 +285,88 @@ func (db *InMemoryDB) Disconnect() error {
 	return nil
 }
 
-func (db *InMemoryDB) AddNode(n *Node) error {
+
+// & AddFunc Section
+func (db *InMemoryDB) AddNode(n *base.Node) error {
 	db.m.Lock()
 	defer db.m.Unlock()
-
+	// check if node has mandatory fields
+	if n.ID == "" {
+		return fmt.Errorf("node ID is required")
+	}
+	if n.Name == "" {
+		return fmt.Errorf("node name is required")
+	}
+	if n.Collection == "" {
+		return fmt.Errorf("node collection is required")
+	}
+	// check if the ID is already in the Nodes
 	if _, ok := db.Nodes[n.ID]; ok {
 		return fmt.Errorf("node with ID %s already exists", n.ID)
 	}
-
+	// check if the name is already in the nodeNameSet by checkNodeNameExists
+	if db.checkNodeNameExists(n.Name) {
+		return fmt.Errorf("node with name %s already exists", n.Name)
+	}
+	// check if the name is already in the NodeNameMap
+	if _, ok := db.NodeNameMap.Get(n.Name); ok {
+		return fmt.Errorf("node with name %s already exists", n.Name)
+	}
+	// add the node to the Nodes and NodeNameMap
 	db.Nodes[n.ID] = n
+	// add the node id and name to the bidimap
+	db.NodeNameMap.Put(n.Name, n.ID)
+	// add the nodename to the nodeNameSet
+	db.nodeNameSet[n.Name] = void{}
+
 	return nil
 }
 
-func (db *InMemoryDB) AddVertex(collection string, data map[string]interface{}) (id string, err error) {
+
+func (db *InMemoryDB) AddEdge(e *base.Edge) error {
 	db.m.Lock()
 	defer db.m.Unlock()
-	defer recoverFromPanic(&err)
-
-	n, err := NewNode(WithNCollection(collection), WithNData(data))
-	if err != nil {
-		return "", err
+	// check if edge has mandatory fields
+	if e.ID == "" {
+		return fmt.Errorf("edge ID is required")
 	}
-
-	// check if the ID is already in the Nodes
-	// if yes, merge the data
-	// if no , add the node to the Nodes
-	if _, ok := db.Nodes[n.ID]; !ok {
-		db.Nodes[n.ID] = n
-	} else {
-		db.Nodes[n.ID].Collection = n.Collection
-		db.Nodes[n.ID].Data = MergeMaps(db.Nodes[n.ID].Data, n.Data)
-
+	if e.Name == "" {
+		return fmt.Errorf("edge name is required")
 	}
-
-	return n.ID, err
-}
-
-func (db *InMemoryDB) AddLink(e *Edge) error {
-	db.m.Lock()
-	defer db.m.Unlock()
-
+	if e.Collection == "" {
+		return fmt.Errorf("edge collection is required")
+	}
+	if e.From == nil {
+		return fmt.Errorf("edge from node is required")
+	}
+	if e.To == nil {
+		return fmt.Errorf("edge to node is required")
+	}
+	// check if the ID is already in the Edges
 	if _, ok := db.Edges[e.ID]; ok {
 		return fmt.Errorf("edge with ID %s already exists", e.ID)
 	}
+	// check if the name is already in the edgeNameSet by checkEdgeNameExists
+	if  db.checkEdgeNameExists(e.Name) {
+		return fmt.Errorf("edge with name %s already exists", e.Name)
+	}
+	// check if the name is already in the EdgeNameMap
+	if _, ok := db.EdgeNameMap.Get(e.Name); ok {
+		return fmt.Errorf("edge with name %s already exists", e.Name)
+	}
 
+	// add the edge to the Edges and EdgeNameMap
 	db.Edges[e.ID] = e
+	// add the edge id and name to the bidimap
+	db.EdgeNameMap.Put(e.Name, e.ID)
+	// add the edgeName to the edgeNameSet
+	db.edgeNameSet[e.Name] = void{}
+
 	return nil
 }
 
-func (db *InMemoryDB) AddEdge(collection string, from, to string, data map[string]interface{}) (id string, err error) {
-	db.m.Lock()
-	defer db.m.Unlock()
-	defer recoverFromPanic(&err)
 
-	// ~ check if the from and to nodes exist
-	if _, ok := db.Nodes[from]; !ok {
-		return "", fmt.Errorf("node with ID %s does not exist", from)
-	}
-	if _, ok := db.Nodes[to]; !ok {
-		return "", fmt.Errorf("node with ID %s does not exist", to)
-	}
-
-	e, err := NewEdge(
-		WithECollection(collection),
-
-		WithEFrom(db.Nodes[from]),
-		WithETo(db.Nodes[to]),
-		WithEData(data))
-	if err != nil {
-		return "", err
-	}
-
-	db.Edges[e.ID] = e
-
-	return e.ID, err
-}
+// ~ Read Func Section
 
 // get node id with the node name, regexp function is used
 // regStr is the str to build regular expression 
@@ -674,7 +394,7 @@ func (db *InMemoryDB) GetNodeIDs(SearchChars string, regfunc regexpFunc) ([]stri
 }
 
 
-func (db *InMemoryDB) GetVertexDB(id string) (map[string]interface{}, error) {
+func (db *InMemoryDB) GetNodeDB(id string) (map[string]interface{}, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
 	// add ID and Collection to the return value
@@ -701,8 +421,8 @@ func (db *InMemoryDB) GetEdgeDB(id string) (map[string]interface{}, error) {
 	}
 	return nil, fmt.Errorf("edge with ID %s does not exist", id)
 }
-
-func (db *InMemoryDB) GetFromVertices(id string) ([]string, error) {
+//  Given a node ID, GetFromVertices returns a list of node IDs that have an edge pointing to the specified node.
+func (db *InMemoryDB) GetFromNodes(id string) ([]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
 
@@ -720,7 +440,8 @@ func (db *InMemoryDB) GetFromVertices(id string) ([]string, error) {
 	return fromVertices, nil
 }
 
-func (db *InMemoryDB) GetToVertices(id string) ([]string, error) {
+// Given a node ID, GetToVertices returns a list of node IDs that the specified node has an edge pointing to.
+func (db *InMemoryDB) GetToNodes(id string) ([]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
 
@@ -737,7 +458,7 @@ func (db *InMemoryDB) GetToVertices(id string) ([]string, error) {
 
 	return toVertices, nil
 }
-
+// Given a node ID, GetInEdges returns a list of edge IDs that point to the specified node.
 func (db *InMemoryDB) GetInEdges(id string) ([]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
@@ -755,7 +476,7 @@ func (db *InMemoryDB) GetInEdges(id string) ([]string, error) {
 
 	return inEdges, nil
 }
-
+// Given a node ID, GetOutEdges returns a list of edge IDs that start from the specified node.
 func (db *InMemoryDB) GetOutEdges(id string) ([]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
@@ -774,7 +495,12 @@ func (db *InMemoryDB) GetOutEdges(id string) ([]string, error) {
 	return outEdges, nil
 }
 
-func (db *InMemoryDB) UpdateVertex(id string, data map[string]interface{}) error {
+
+
+// ~ Update Func Section
+// UpdateNodeData updates the data of a node with the specified ID.
+// It merges the existing data with the new data and updates the node in the database.
+func (db *InMemoryDB) UpdateNodeData(id string, data map[string]interface{}) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 
@@ -785,40 +511,68 @@ func (db *InMemoryDB) UpdateVertex(id string, data map[string]interface{}) error
 	return nil
 }
 
-func (db *InMemoryDB) UpdateEdge(id, from, to string, data map[string]interface{}) error {
+// UpdateEdgeData updates the data of an edge with the specified ID.
+// It merges the existing data with the new data and updates the edge in the database.
+func (db *InMemoryDB) UpdateEdgeData(id string, data map[string]interface{}) error {
 	db.m.Lock()
 	defer db.m.Unlock()
-
-	if _, ok := db.Nodes[from]; !ok {
-		return fmt.Errorf("node with ID %s does not exist", from)
-	}
-	if _, ok := db.Nodes[to]; !ok {
-		return fmt.Errorf("node with ID %s does not exist", to)
-	}
 
 	if _, ok := db.Edges[id]; !ok {
 		return fmt.Errorf("edge with ID %s does not exist", id)
 	}
-
-	db.Edges[id].From = db.Nodes[from]
-	db.Edges[id].To = db.Nodes[to]
 	db.Edges[id].Data = MergeMaps(db.Edges[id].Data, data)
 	return nil
 }
 
-func (db *InMemoryDB) DeleteVertex(id string) error {
+// UpdateNodeName updates the name of a node with the specified ID.
+// node would be replaced by the new node
+func (db *InMemoryDB) UpdateNode(n *base.Node) error {
+	db.m.Lock()
+	defer db.m.Unlock()
+
+	if _, ok := db.Nodes[n.ID]; !ok {
+		return fmt.Errorf("node with ID %s does not exist", n.ID)
+	}
+
+	db.Nodes[n.ID] = n
+	return nil
+}
+
+// UpdateEdge updates the edge with the specified ID.
+// edge would be replaced by the new edge
+func (db *InMemoryDB) UpdateEdge(e *base.Edge) error {
+	db.m.Lock()
+	defer db.m.Unlock()
+
+	if _, ok := db.Edges[e.ID]; !ok {
+		return fmt.Errorf("edge with ID %s does not exist", e.ID)
+	}
+
+	db.Edges[e.ID] = e
+	return nil
+}
+
+
+// ~ Delete Func Section
+func (db *InMemoryDB) DeleteNode(id string) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 
 	if _, ok := db.Nodes[id]; !ok {
 		return fmt.Errorf("node with ID %s does not exist", id)
 	}
-
+	// delete the node from the Nodes and NodeNameMap
 	delete(db.Nodes, id)
+	// delete the node id and name from the bidimap
+	db.NodeNameMap.Remove(id)
 
 	for _, e := range db.Edges {
 		if e.From.ID == id || e.To.ID == id {
+			// delete the edge from the Edges and EdgeNameMap
 			delete(db.Edges, e.ID)
+			// delete the edge id and name from the bidimap
+			db.EdgeNameMap.Remove(e.ID)
+
 		}
 	}
 
@@ -886,7 +640,7 @@ func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...s
 	}
 
 	var result [][]string
-	tmpEdges := make(map[string]*Edge)
+	tmpEdges := make(map[string]*base.Edge)
 	// create new graph with the same nodes but only the edges in the edgeSlice
 	// iterate over the edgeSlice
 	for _, edgeID := range edgeSlice {

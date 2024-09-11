@@ -8,6 +8,12 @@ require (
 )
 
 require (
+	github.com/arangodb/go-velocypack v0.0.0-20200318135517-5af53c29c67e // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+)
+
+require (
+	github.com/arangodb/go-driver v1.6.2
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emirpasic/gods v1.18.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
