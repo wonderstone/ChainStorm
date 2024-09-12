@@ -1,49 +1,43 @@
 package handler
 
+type Node interface {
+	Export() map[string]interface{}
+}
+
+type Edge interface {
+	Export() map[string]interface{}
+}
+
 // collection is not mandatory for node/vertex，but is good for node-management in categories
 // it is the concept borrowed from arangodb
 type GraphDB interface {
-	// + Init operations
+	// - Init operations
 	Init(yamlPath string) error
-	// + Connection operations
+	// - Connection operations
 	Connect() error
 	Disconnect() error
 
-	// + CRUD operations
+	// - CRUD operations
 	// + Create operations
-	AddVertex(collection string, db map[string]interface{}) (id string, err error)
-	AddEdge(collection string, from, to string, db map[string]interface{}) (id string, err error)
+	AddNode(n Node) (id interface{},err error)
+	AddEdge(e Edge) (id interface{},err error)
 	// + Query operations
-	GetVertexDB(id string) (map[string]interface{}, error)
-	GetEdgeDB(id string) (map[string]interface{}, error)
-	GetFromVertices(id string) ([]string, error)
-	GetToVertices(id string) ([]string, error)
-	GetInEdges(id string) ([]string, error)
-	GetOutEdges(id string) ([]string, error)
+	GetNode(id interface{}) (Node, error)
+	GetEdge(id interface{}) (Edge, error)
+	GetFromNodes(id interface{}) ([]interface{}, error)
+	GetToNodes(id interface{}) ([]interface{}, error)
+	GetInEdges(id interface{}) ([]interface{}, error)
+	GetOutEdges(id interface{}) ([]interface{}, error)
 	// + Update operations
-	UpdateVertex(id string, db map[string]interface{}) error
-	UpdateEdge(id, from, to string, db map[string]interface{}) error
+	UpdateNode(n Node) (id interface{},err error)
+	UpdateEdge(e Edge) (id interface{},err error)
 	// + Delete operations
-	DeleteVertex(id string) error
-	DeleteEdge(id string) error
+	DeleteNode(id interface{}) error
+	DeleteEdge(id interface{}) error
 
 	// + Graph operations
 	// - Traversal operations
-	GetAllRelatedVertices(id string) ([][]string, error)
-	GetAllRelatedVerticesInEdgeSlice(id string, EdgeSlice ...string) ([][]string, error)
-	GetAllRelatedVerticesInRange(id string, min, max int) ([][]string, error)
-
-// 	// - Shortest path operations
-// 	ShortestPath(from, to string) ([]string, error)
-// 	ShortestPathInEdgeCollections(from, to string, collections ...string) ([]string, error)
-// 	ShortestPathInRange(from, to string, min, max int) ([]string, error)
-
-// 	// - Custom operations
-// 	CustomQuery(query string) ([]string, error)
-// 
+	GetAllRelatedNodes(id interface{}) ([][]interface{}, error)
+	GetAllRelatedNodesInEdgeSlice(id interface{}, EdgeSlice ...Edge) ([][]interface{}, error)
+	GetAllRelatedNodesInRange(id interface{}, min, max int) ([][]interface{}, error)
 }
-
-
-
-
-

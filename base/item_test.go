@@ -20,7 +20,7 @@ func TestNewNode(t *testing.T) {
 
 	uid := uuid.New().String()
 
-	node, _ := NewNode(WithNID(uid), WithNName("600001"), WithNCollection("company"), WithNData(dt))
+	node, _ := NewNode( WithNName("600001"), WithNCollection("company"), WithNData(dt))
 	// Check if the node is created correctly
 	assert.Equal(t, uid, node.ID)
 	// add node companyEmployees field by 1 and assign back to it
@@ -50,7 +50,7 @@ func TestNewNode(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		uid = uuid.New().String()
 		node, _ = NewNode(
-			WithNID(uid),
+
 			WithNName(fmt.Sprintf("60000%d", i)),
 			WithNCollection("company"),
 			WithNData(dt))
@@ -83,7 +83,6 @@ func TestNewEdge(t *testing.T) {
 			t.Error(err)
 		}
 		node, _ := NewNode(
-			WithNID(dt["ID"].(string)),
 			WithNName(dt["Name"].(string)),
 			WithNCollection("company"),
 			WithNData(dt))

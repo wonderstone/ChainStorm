@@ -52,7 +52,7 @@ func TestInMemoryDB(t *testing.T) {
 	}
 
 	// Test BFSWithLevels
-	res:= db.BFSWithLevels("600001")
+	res:= db.BFSWithLevels(nodes[0])
 	fmt.Println(res)
 	assert.Equal(t, 2, len(res))
 	// Test BFSWithLevelsStruct
@@ -69,7 +69,7 @@ func TestInMemoryDB(t *testing.T) {
 	// }
 	// assert.Equal(t, 10, len(resPaths))
 	// Test BFSWithWeightRange
-	res = db.BFSWithWeightRange("600001", 0, 0)
+	res = db.BFSWithWeightRange(nodes[0], 0, 0)
 	fmt.Println(res)
 	assert.Equal(t, 1, len(res))
 

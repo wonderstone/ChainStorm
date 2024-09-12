@@ -1,0 +1,6 @@
+username: root
+password: mypassword
+server: http://localhost
+port: 8529
+dbname: mydb
+name: wonderstone
