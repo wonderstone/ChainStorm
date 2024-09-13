@@ -12,7 +12,6 @@ func TestInit(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-
 }
 
 // test the Connect and Disconnect methods

@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/wonderstone/chainstorm/base"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,7 +49,7 @@ func (db *InMemoryDB) BFSWithLevels(startID string) [][]string {
 	}
 
 	visited := make(map[string]bool)
-	queue := []*base.Node{startNode}
+	queue := []*Node{startNode}
 	var result [][]string
 
 	for len(queue) > 0 {
@@ -93,7 +92,7 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 
 	visited := make(map[string]bool)
 	queue := []struct {
-		node        *base.Node
+		node        *Node
 		totalWeight int
 		path        []string
 	}{{node: startNode, totalWeight: 0, path: []string{startNode.ID}}}
@@ -121,7 +120,7 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 				newPath := append([]string(nil), path...)
 				newPath = append(newPath, edge.To.ID)
 				queue = append(queue, struct {
-					node        *base.Node
+					node        *Node
 					totalWeight int
 					path        []string
 				}{node: edge.To, totalWeight: newWeight, path: newPath})
@@ -203,7 +202,7 @@ func (db *InMemoryDB) Connect() error {
 				filePath := filepath.Join(db.configPath, collection, fileName)
 
 				// read the file
-				data, err := base.ReadJSONFile(filePath)
+				data, err := ReadJSONFile(filePath)
 				if err != nil {
 					return err
 				}
@@ -217,14 +216,14 @@ func (db *InMemoryDB) Connect() error {
 						tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
 					}
 
-					edge, err := base.NewEdge(
-						base.WithEID(data["ID"].(string)),
-						base.WithEName(data["Name"].(string)),
-						base.WithECollection(collection), // should be the same as the data["Collection"] field
-						base.WithEFrom(db.Nodes[from]),
-						base.WithETo(db.Nodes[to]),
-						base.WithEWeight(int(tmpWeight)),
-						base.WithEData(data))
+					edge, err := NewEdge(
+						WithEID(data["ID"].(string)),
+						WithEName(data["Name"].(string)),
+						WithECollection(collection), // should be the same as the data["Collection"] field
+						WithEFrom(db.Nodes[from]),
+						WithETo(db.Nodes[to]),
+						WithEWeight(int(tmpWeight)),
+						WithEData(data))
 
 					if err != nil {
 						return err
@@ -235,11 +234,11 @@ func (db *InMemoryDB) Connect() error {
 					db.EdgeNameMap.Put(edge.ID, edge.Name)
 				} else {
 					// create a node
-					node, err := base.NewNode(
-						base.WithNID(data["ID"].(string)),
-						base.WithNName(data["Name"].(string)),
-						base.WithNCollection(collection),
-						base.WithNData(data))
+					node, err := NewNode(
+						WithNID(data["ID"].(string)),
+						WithNName(data["Name"].(string)),
+						WithNCollection(collection),
+						WithNData(data))
 					if err != nil {
 						return err
 					}
@@ -261,7 +260,7 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Nodes
 	// write the node to the file
 	for _, node := range db.Nodes {
-		err := base.WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
+		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
 		if err != nil {
 			return err
 		}
@@ -270,14 +269,14 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Edges
 	// write the edge to the file
 	for _, edge := range db.Edges {
-		err := base.WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
 		if err != nil {
 			return err
 		}
 	}
 
 	// output hte NodeNameMap and EdgeNameMap to the file
-	err := base.WriteJSONFile(filepath.Join(db.configPath, "InMemoryDB.json"), db.Export())
+	err := WriteJSONFile(filepath.Join(db.configPath, "InMemoryDB.json"), db.Export())
 	if err != nil {
 		return err
 	}
@@ -287,7 +286,7 @@ func (db *InMemoryDB) Disconnect() error {
 
 
 // & AddFunc Section
-func (db *InMemoryDB) AddNode(n *base.Node) error {
+func (db *InMemoryDB) AddNode(n *Node) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 	// check if node has mandatory fields
@@ -323,7 +322,7 @@ func (db *InMemoryDB) AddNode(n *base.Node) error {
 }
 
 
-func (db *InMemoryDB) AddEdge(e *base.Edge) error {
+func (db *InMemoryDB) AddEdge(e *Edge) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 	// check if edge has mandatory fields
@@ -526,7 +525,7 @@ func (db *InMemoryDB) UpdateEdgeData(id string, data map[string]interface{}) err
 
 // UpdateNodeName updates the name of a node with the specified ID.
 // node would be replaced by the new node
-func (db *InMemoryDB) UpdateNode(n *base.Node) error {
+func (db *InMemoryDB) UpdateNode(n *Node) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 
@@ -540,7 +539,7 @@ func (db *InMemoryDB) UpdateNode(n *base.Node) error {
 
 // UpdateEdge updates the edge with the specified ID.
 // edge would be replaced by the new edge
-func (db *InMemoryDB) UpdateEdge(e *base.Edge) error {
+func (db *InMemoryDB) UpdateEdge(e *Edge) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 
@@ -640,7 +639,7 @@ func (db *InMemoryDB) GetAllRelatedVerticesInEdgeSlice(id string, edgeSlice ...s
 	}
 
 	var result [][]string
-	tmpEdges := make(map[string]*base.Edge)
+	tmpEdges := make(map[string]*Edge)
 	// create new graph with the same nodes but only the edges in the edgeSlice
 	// iterate over the edgeSlice
 	for _, edgeID := range edgeSlice {

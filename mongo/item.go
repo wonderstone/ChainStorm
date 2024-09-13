@@ -14,6 +14,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type void struct{}
+
 type Node struct {
 	ID         primitive.ObjectID     `bson:"_id,omitempty"`
 	Collection string                 `bson:"collection"`
@@ -56,6 +58,9 @@ type MongoGraph struct {
 	server   string
 	port     int
 	database string
+
+	// use collectionSet to store the created collection names
+	collectionSet map[string]void
 	
 	client *mongo.Client
 }
@@ -86,6 +91,8 @@ func (mg *MongoGraph) Init(yamlPath string) error {
 	mg.port = data["port"].(int)
 	mg.database = data["database"].(string)
 
+	mg.collectionSet = make(map[string]void)
+
 	return err
 }
 
@@ -99,6 +106,20 @@ func (mg *MongoGraph) Connect() error {
 		return err
 	}
 	mg.client = client
+
+	// get all the collections in the database and assign to the collectionSet
+	collections, err := client.Database(mg.database).ListCollectionNames(context.Background(), bson.D{})
+	if err != nil {
+		return err
+	}
+
+	// create a new collectionSet
+	mg.collectionSet = make(map[string]void)
+	for _, col := range collections {
+		mg.collectionSet[col] = void{}
+	}
+
+
 	return nil
 }
 
@@ -113,37 +134,52 @@ func (mg *MongoGraph) Disconnect() error {
 
 
 
-// func to check if the collection target index is unique
-func checkUniqueIndex(col *mongo.Collection, indexName string) bool {
-	// get the indexes
-	indexes, err := col.Indexes().List(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer indexes.Close(context.Background())
-
-	// check if the index exists
-	for indexes.Next(context.Background()) {
-		var index bson.M
-		err := indexes.Decode(&index)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if index["name"] == indexName {
-			return true
-		}
-	}
-	return false
+// func to check if the collection exists
+func (mg *MongoGraph) collectionExists(collection string) bool {
+	_, ok := mg.collectionSet[collection]
+	return ok
 }
 
-// implement the AddNode method
+// func to create new collection with the name as unique index
+func (mg *MongoGraph) createCollection(collection string) error {
+	// get the database
+	db := mg.client.Database(mg.database)
+	// index model
+	indexModel := mongo.IndexModel{
+		Keys: bson.M{"name": 1},
+		Options: options.Index().SetUnique(true),
+	}
+	// create the collection
+	err := db.CreateCollection(context.Background(),collection)
+
+	// create the index
+	_, err = db.Collection(collection).Indexes().CreateOne(context.Background(), indexModel)
+	if err != nil {
+		return err
+	}
+	// add the collection to the collectionSet
+	mg.collectionSet[collection] = void{}
+	return nil
+}
+
+// implement the AddNode method，
+// return the inserted ID and error
 func (mg *MongoGraph) AddNode(n Node)  (interface{}, error) {
 	var err error
 	defer recoverFromPanic(&err)
-	// get the database and collection
+	// check if the collection exists, if not create the collection
+	if !mg.collectionExists(n.Collection) {
+		// create the collection
+		err = mg.createCollection(n.Collection)
+		if err != nil {
+			return nil,err
+		}
+	}
+
+	// right now the collection exists and has name as unique index
+	// insert the node
 	db := mg.client.Database(mg.database)
-	colName := n.Collection
-	verticesCol := db.Collection(colName)
+	verticesCol := db.Collection(n.Collection)
 
 	// insert the node
 	res, err := verticesCol.InsertOne(context.TODO(), n)
@@ -155,6 +191,7 @@ func (mg *MongoGraph) AddNode(n Node)  (interface{}, error) {
 }
 
 // implement the GetNode method
+// return the node and error
 func (mg *MongoGraph) GetNode(id interface{}) (Node, error) {
 	var err error
 	defer recoverFromPanic(&err)
