@@ -4,26 +4,16 @@ A personal graph database using JSON input.
 
 Graph has vertex(node) and edge component type.
 
-### Vertex(Node):  
-1. Mandatory Part: ID,Collection,Name      
+Node has unique name
 
+### Vertex(Node):  
+1. Mandatory Part: ID(can be app generated),Collection,Name      
 2. Optional Part: Data
 
 
 ### Edge/EdgeJSON
-1. Mandatory Part: ID,Collection,From(Node),To(Node)    
-
+1. Mandatory Part: ID(can be app generated),Collection,From,To,Relationship   
 2. Optional Part: Weight,Data
-
-
-### InMemoryDB 
-	Nodes      map[string]*Node
-	Edges      map[string]*Edge 
-	m          sync.RWMutex 
-	configPath string     
-
-	NodeNameMap *hashbidimap.Map
-	EdgeNameMap *hashbidimap.Map  
 
 
 
@@ -36,6 +26,6 @@ Graph has vertex(node) and edge component type.
 
 The key query I can think of right now is given a piece of info, and exact several items, to check if some item is in the Graph and give related nodes(in some range and limited edges)
 
-Make the info update continuously, maybe by some crawler or pdf(financial statement) processor based on the llm, users would have their own local knowledge graph, for confideniallity reasons that may be concerned in Investment
+Make the info update continuously, maybe by some crawler or pdf(financial statement) processor based on the LLM, users would have their own local knowledge graph, for confideniallity reasons that may be concerned in Investment
 
 let's see if it can further serve the llm as local knowledge

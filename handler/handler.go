@@ -19,25 +19,33 @@ type GraphDB interface {
 
 	// - CRUD operations
 	// + Create operations
-	AddNode(n Node) (id interface{},err error)
-	AddEdge(e Edge) (id interface{},err error)
-	// + Query operations
-	GetNode(id interface{}) (Node, error)
-	GetEdge(id interface{}) (Edge, error)
-	GetFromNodes(id interface{}) ([]interface{}, error)
-	GetToNodes(id interface{}) ([]interface{}, error)
-	GetInEdges(id interface{}) ([]interface{}, error)
-	GetOutEdges(id interface{}) ([]interface{}, error)
+	AddNode(n Node) (interface{}, error)
+	AddEdge(e Edge) (interface{}, error)
 	// + Update operations
-	UpdateNode(n Node) (id interface{},err error)
-	UpdateEdge(e Edge) (id interface{},err error)
+	ReplaceNode(n Node) error
+	ReplaceEdge(e Edge) error
+	UpdateNode(n Node) error
+	UpdateEdge(e Edge) error
+	MergeNode(n Node) error
+	MergeEdge(e Edge) error
 	// + Delete operations
-	DeleteNode(id interface{}) error
-	DeleteEdge(id interface{}) error
+	DeleteNode(name interface{}) error
+	DeleteItemByID(id interface{}) error
+
+	// + Query operations
+	GetItemByID(id interface{}) (interface{}, error)
+	GetNode(name interface{}) (Node, error)
+	GetNodesByRegex(regex string) ([]Node, error)
+	GetEdgesByRegex(regex string) ([]Edge, error)
+
+	GetFromNodes(name interface{}) ([]Node, error)
+	GetToNodes(name interface{}) ([]Node, error)
+	GetInEdges(name interface{}) ([]Edge, error)
+	GetOutEdges(name interface{}) ([]Edge, error)
 
 	// + Graph operations
 	// - Traversal operations
-	GetAllRelatedNodes(id interface{}) ([][]interface{}, error)
-	GetAllRelatedNodesInEdgeSlice(id interface{}, EdgeSlice ...Edge) ([][]interface{}, error)
-	GetAllRelatedNodesInRange(id interface{}, min, max int) ([][]interface{}, error)
+	GetAllRelatedNodes(name interface{}) ([][]Node, error)
+	GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
+	GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
 }
