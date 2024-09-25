@@ -47,5 +47,5 @@ type GraphDB interface {
 	// - Traversal operations
 	GetAllRelatedNodes(name interface{}) ([][]Node, error)
 	GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
-	GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
+	// GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"testing"
 
 	"github.com/google/uuid"
@@ -50,7 +49,6 @@ func TestNewNode(t *testing.T) {
 	// based on the node, create 10 new nodes in the same collection
 	// every new node change the "ID" and "Name" field to a new value
 	for i := 0; i < 5; i++ {
-		uid = uuid.New().String()
 		node, _ = NewNode(
 
 			WithNName(fmt.Sprintf("60000%d", i)),
@@ -113,10 +111,3 @@ func TestNewEdge(t *testing.T) {
 }
 
 
-func regContain(targetStr,regStr string) bool{
-	// define the regexp to contain the node name,
-	// and maybe have some other characters before and after the node name
-	// for example, the node name is 600001, the regexp can be `.*600001.*`
-	regexp1 := regexp.MustCompile(".*"+regStr+".*")
-	return regexp1.MatchString(targetStr)
-}

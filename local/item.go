@@ -58,16 +58,6 @@ func WithNData(data map[string]interface{}) NOption {
 }
 
 
-// hasNodeKeys 用于检查Data中是否包含指定的key
-func hasNodeKeys(data map[string]interface{}, keys ...string) bool {
-	for _, key := range keys {
-		if _, ok := data[key]; !ok {
-			return false
-		}
-	}
-	return true
-}
-
 
 
 // NewNode 用于创建一个新的节点, if node mandatory info is not provided, it will return nil and error
