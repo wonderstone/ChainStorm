@@ -25,10 +25,10 @@ type void struct{}
 // also give the json tag to the struct field
 
 type Node struct {
-	ID         string                 `json:"ID"`         // 节点的唯一标识符
-	Collection string                 `json:"Collection"` // 节点所属的集合
-	Name       string                 `json:"Name"`       // 节点的名称
-	Data       map[string]interface{} `json:"Data"`       // 节点存储的数据
+	ID         string                 `json:"ID,omitempty"` // 节点的唯一标识符
+	Collection string                 `json:"Collection"`   // 节点所属的集合
+	Name       string                 `json:"Name"`         // 节点的名称
+	Data       map[string]interface{} `json:"Data"`         // 节点存储的数据
 }
 
 type NOption func(*Node)
@@ -56,6 +56,19 @@ func WithNData(data map[string]interface{}) NOption {
 		n.Data = data
 	}
 }
+
+
+// hasNodeKeys 用于检查Data中是否包含指定的key
+func hasNodeKeys(data map[string]interface{}, keys ...string) bool {
+	for _, key := range keys {
+		if _, ok := data[key]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+
 
 // NewNode 用于创建一个新的节点, if node mandatory info is not provided, it will return nil and error
 func NewNode(options ...NOption) (*Node, error) {
@@ -98,24 +111,22 @@ func (n *Node) Export() map[string]interface{} {
 // if Data contains the Weight, then Weight is the value
 // if Data doesn't contain the Weight, then Weight is 0
 type Edge struct {
-	ID         string                 // 边的唯一标识符
-	Collection string                 // 边所属的集合
-	Name       string                 // 边的名称
-	From       *Node                  // 起始节点
-	To         *Node                  // 目标节点
-	Weight     int                    // 边的权重
-	Data       map[string]interface{} // 节点存储的数据
+	ID           string                 // 边的唯一标识符
+	Collection   string                 // 边所属的集合
+	Relationship string                 // 边的名称
+	From         *Node                  // 起始节点
+	To           *Node                  // 目标节点
+	Data         map[string]interface{} // 节点存储的数据
 }
 
 // EdgeJSON is an intermediate struct for JSON deserialization
 type EdgeJSON struct {
-	ID         string                 `json:"ID"`
-	Collection string                 `json:"Collection"`
-	Name       string                 `json:"Name"`
-	From       string                 `json:"From"`
-	To         string                 `json:"To"`
-	Weight     int                    `json:"Weight"`
-	Data       map[string]interface{} `json:"Data"`
+	ID           string                 `json:"ID"`
+	Collection   string                 `json:"Collection"`
+	Relationship string                 `json:"Name"`
+	From         string                 `json:"From"`
+	To           string                 `json:"To"`
+	Data         map[string]interface{} `json:"Data"`
 }
 
 type EOption func(*Edge)
@@ -135,7 +146,7 @@ func WithECollection(collection string) EOption {
 
 func WithEName(name string) EOption {
 	return func(e *Edge) {
-		e.Name = name
+		e.Relationship = name
 	}
 }
 
@@ -151,12 +162,6 @@ func WithETo(to *Node) EOption {
 	}
 }
 
-func WithEWeight(weight int) EOption {
-	return func(e *Edge) {
-		e.Weight = weight
-	}
-}
-
 func WithEData(data map[string]interface{}) EOption {
 	return func(e *Edge) {
 		e.Data = data
@@ -166,8 +171,7 @@ func WithEData(data map[string]interface{}) EOption {
 // NewEdge 用于创建一个新的边, collection, from, to are mandatory
 func NewEdge(options ...EOption) (*Edge, error) {
 	e := &Edge{
-		Weight: 1,
-		Data:   make(map[string]interface{}),
+		Data: make(map[string]interface{}),
 	}
 	for _, opt := range options {
 		opt(e)
@@ -183,8 +187,8 @@ func NewEdge(options ...EOption) (*Edge, error) {
 	}
 
 	// check if edge contains the Name,  if not, return nil and error
-	if e.Name == "" {
-		return nil, fmt.Errorf("name is mandatory")
+	if e.Relationship == "" {
+		return nil, fmt.Errorf("relationship is mandatory")
 	}
 
 	// check if edge contains the From,  if not, return nil and error
@@ -204,22 +208,20 @@ func (e *Edge) Export() map[string]interface{} {
 	tmp := e.Data
 	tmp["ID"] = e.ID
 	tmp["Collection"] = e.Collection
-	tmp["Name"] = e.Name
+	tmp["Relationship"] = e.Relationship
 	tmp["From"] = e.From.ID
 	tmp["To"] = e.To.ID
-	tmp["Weight"] = e.Weight
 	return tmp
 }
 
 func (e *Edge) ExportJSON() *EdgeJSON {
 	return &EdgeJSON{
-		ID:         e.ID,
-		Collection: e.Collection,
-		Name:       e.Name,
-		From:       e.From.ID,
-		To:         e.To.ID,
-		Weight:     e.Weight,
-		Data:       e.Data,
+		ID:           e.ID,
+		Collection:   e.Collection,
+		Relationship: e.Relationship,
+		From:         e.From.ID,
+		To:           e.To.ID,
+		Data:         e.Data,
 	}
 }
 
@@ -227,9 +229,9 @@ func (ej *EdgeJSON) Export() map[string]interface{} {
 	tmp := ej.Data
 	tmp["ID"] = ej.ID
 	tmp["Collection"] = ej.Collection
+	tmp["Relationship"] = ej.Relationship
 	tmp["From"] = ej.From
 	tmp["To"] = ej.To
-	tmp["Weight"] = ej.Weight
 	return tmp
 }
 
@@ -285,14 +287,13 @@ type InMemoryDB struct {
 	Nodes map[string]*Node // 节点集合, key is the ID of the node
 	Edges map[string]*Edge // 边集合, key is the ID of the edge
 
-	m           sync.RWMutex    // 用于并发控制的读写锁
-	configPath  string          // 配置文件路径
+	m          sync.RWMutex // 用于并发控制的读写锁
+	configPath string       // 配置文件路径
+
 	nodeNameSet map[string]void // 用于存储节点名称的集合 要建立node name的唯一性约束
-	edgeNameSet map[string]void // 用于存储边名称的集合 要建立edge name的唯一性约束
 
 	// BidiMap for ID : NodeName and ID : EdgeName
 	NodeNameMap *hashbidimap.Map
-	EdgeNameMap *hashbidimap.Map
 }
 
 func NewInMemoryDB() (*InMemoryDB, error) {
@@ -301,21 +302,19 @@ func NewInMemoryDB() (*InMemoryDB, error) {
 		Edges: make(map[string]*Edge),
 
 		nodeNameSet: make(map[string]void),
-		edgeNameSet: make(map[string]void),
 
 		NodeNameMap: hashbidimap.New(),
-		EdgeNameMap: hashbidimap.New(),
 	}
 
 	// Check if any of the initializations failed
-	if db.Nodes == nil || db.Edges == nil || db.nodeNameSet == nil || db.edgeNameSet == nil || db.NodeNameMap == nil || db.EdgeNameMap == nil {
+	if db.Nodes == nil || db.Edges == nil || db.nodeNameSet == nil || db.NodeNameMap == nil {
 		return nil, fmt.Errorf("failed to initialize InMemoryDB")
 	}
 
 	return db, nil
 }
 
-// Export 用于导出NodeNameMap 和 EdgeNameMap 的数据 in json format
+// Export 用于导出NodeNameMap 的数据 in json format
 func (db *InMemoryDB) Export() map[string]interface{} {
 	tmp := make(map[string]interface{})
 	// iter all the nodes in the NodeNameMap and output the key and data pair in json
@@ -325,15 +324,6 @@ func (db *InMemoryDB) Export() map[string]interface{} {
 		nodeNameMap[k.(string)] = v.(string)
 	}
 	tmp["NodeNameMap"] = nodeNameMap
-
-	// iter all the edges in the EdgeNameMap and output the key and data pair in json
-	edgeNameMap := make(map[string]string)
-	for _, k := range db.EdgeNameMap.Keys() {
-		v, _ := db.EdgeNameMap.Get(k)
-		edgeNameMap[k.(string)] = v.(string)
-	}
-
-	tmp["EdgeNameMap"] = edgeNameMap
 
 	return tmp
 }
@@ -346,11 +336,6 @@ func (db *InMemoryDB) Import(data map[string]interface{}) error {
 		return fmt.Errorf("NodeNameMap is missing")
 	}
 
-	// check if the data contains the EdgeNameMap key
-	if _, ok := data["EdgeNameMap"]; !ok {
-		return fmt.Errorf("EdgeNameMap is missing")
-	}
-
 	// import the NodeNameMap data
 	nodeNameMap, ok := data["NodeNameMap"].(map[string]interface{})
 	if !ok {
@@ -361,25 +346,15 @@ func (db *InMemoryDB) Import(data map[string]interface{}) error {
 		db.NodeNameMap.Put(k, v)
 	}
 
-	// import the EdgeNameMap data
-	edgeNameMap, ok := data["EdgeNameMap"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("EdgeNameMap is not a map")
-	}
-	for k, v := range edgeNameMap {
-		db.EdgeNameMap.Put(k, v)
-	}
-
 	return nil
 
 }
 
 // RegenerateSet iterates through all nodes and edges in the database,
-// updating the nodeNameSet and edgeNameSet to ensure that each node
+// updating the nodeNameSet to ensure that each node
 // and edge name is unique. If a duplicate name is found, an error is returned.
 func (db *InMemoryDB) RegenerateSet() error {
 	db.nodeNameSet = make(map[string]void)
-	db.edgeNameSet = make(map[string]void)
 	// Iterate over all nodes in the database to update the node name set.
 	// This ensures that each node name is unique by checking for duplicates.
 	for _, v := range db.Nodes {
@@ -391,16 +366,7 @@ func (db *InMemoryDB) RegenerateSet() error {
 		}
 		db.nodeNameSet[v.Name] = void{}
 	}
-	// Check if the edge name is already in the set.
-	// This ensures that each edge name is unique within the graph.
-	// If a duplicate edge name is found, return an error indicating the name is not unique.
-	for _, v := range db.Edges {
-		// if the edge name is already in the set, then return an error
-		if _, ok := db.edgeNameSet[v.Name]; ok {
-			return fmt.Errorf("edge name %s is not unique", v.Name)
-		}
-		db.edgeNameSet[v.Name] = void{}
-	}
+
 	return nil
 }
 
@@ -410,24 +376,14 @@ func (db *InMemoryDB) checkNodeNameExists(name string) bool {
 	return ok
 }
 
-// check if the edge name is Exists
-func (db *InMemoryDB) checkEdgeNameExists(name string) bool {
-	_, ok := db.edgeNameSet[name]
-	return ok
-}
-
 // update the two NodeNameMap and EdgeNameMap bidimap by the Nodes and Edges
 func (db *InMemoryDB) RegenerateBidimap() {
 	db.NodeNameMap.Clear()
-	db.EdgeNameMap.Clear()
 	// iter all the nodes and edges and update the two bidimap
 	for k, v := range db.Nodes {
 		db.NodeNameMap.Put(k, v.Name)
 	}
 
-	for k, v := range db.Edges {
-		db.EdgeNameMap.Put(k, v.Name)
-	}
 }
 
 // ~ GraphDB Definition Section END

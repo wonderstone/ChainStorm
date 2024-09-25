@@ -4,10 +4,369 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
+	"github.com/google/uuid"
+	"github.com/wonderstone/chainstorm/handler"
 	"gopkg.in/yaml.v3"
 )
+
+// implement the GraphDB interface
+
+// - Init operations
+// Init(yamlPath string) error
+func (db *InMemoryDB) Init(yamlPath string) error {
+	// read the config yaml file from the yamlPath
+	// parse the yaml file and set the
+	// db.configPath is equal to dataPath field in the yaml file
+	// read the yaml file
+	yamlData, err := os.ReadFile(yamlPath)
+
+	if err != nil {
+		return err
+	}
+
+	// unmarshal the yaml data into a map
+	var data map[string]interface{}
+	err = yaml.Unmarshal(yamlData, &data)
+
+	if err != nil {
+		return err
+	}
+
+	// set the db.configPath
+	dataPath, ok := data["dataPath"].(string)
+	if !ok {
+		return fmt.Errorf("dataPath is not a string")
+	}
+	db.configPath = dataPath
+	return nil
+}
+
+// - Connection operations
+
+// checkType function is used to check if the data is a node or an edge or neither
+func checkType(data map[string]interface{}) string {
+	// if data has all the mandatory fields of a node, return "node"
+	if _, ok := data["ID"]; ok {
+		if _, ok := data["Name"]; ok {
+			if _, ok := data["Collection"]; ok {
+				return "node"
+			}
+		}
+	}
+	// if data has all the mandatory fields of an edge, return "edge"
+	if _, ok := data["From"]; ok {
+		if _, ok := data["To"]; ok {
+			if _, ok := data["Collection"]; ok {
+				if _, ok := data["ID"]; ok {
+					if _, ok := data["Relationship"]; ok {
+						return "edge"
+					}
+				}
+			}
+		}
+	}
+	// if data is neither a node nor an edge, return "neither"
+	return "neither"
+}
+
+// Connect() error
+// 读取本地文件并将其内容加载到内存中
+func (db *InMemoryDB) Connect() error {
+	// read the configPath file
+	// every collection is a directory in the configPath
+	// get all the json files in each collection
+	// read the json files and check if it is a node or an edge
+	// add the node or edge to the db.Nodes or db.Edges
+
+	// get all the directories in the configPath
+	dirs, err := os.ReadDir(db.configPath)
+	if err != nil {
+		return err
+	}
+
+	// iterate over the directories the first time for nodes only
+	for _, dir := range dirs {
+		if dir.IsDir() {
+			// get all the json files in the directory
+			files, err := os.ReadDir(filepath.Join(db.configPath, dir.Name()))
+			if err != nil {
+				return err
+			}
+
+			// iterate over the files
+			for _, file := range files {
+				// read the json file
+				data, err := ReadJSONFile(filepath.Join(db.configPath, dir.Name(), file.Name()))
+				if err != nil {
+					return err
+				}
+				// check if the data is a node
+				if checkType(data) == "node" {
+
+					// check if the node has the data field
+					if _, ok := data["Data"]; !ok {
+						// create a new node
+						node, err := NewNode(
+							WithNID(data["ID"].(string)),
+							WithNName(data["Name"].(string)),
+							WithNCollection(data["Collection"].(string)),
+						)
+						if err != nil {
+							return err
+						}
+						// add the node to the db.Nodes
+						db.Nodes[node.ID] = node
+						// add the node name to the nodeNameSet
+						db.nodeNameSet[node.Name] = void{}
+						// add the node name and id to the NodeNameMap
+						db.NodeNameMap.Put(node.Name, node.ID)
+
+					} else {
+						// create a new node with the data field
+						node, err := NewNode(
+							WithNID(data["ID"].(string)),
+							WithNName(data["Name"].(string)),
+							WithNCollection(data["Collection"].(string)),
+							WithNData(data["Data"].(map[string]interface{})),
+						)
+						if err != nil {
+							return err
+						}
+						// add the node to the db.Nodes
+						db.Nodes[node.ID] = node
+						// add the node name to the nodeNameSet
+						db.nodeNameSet[node.Name] = void{}
+						// add the node name and id to the NodeNameMap
+						db.NodeNameMap.Put(node.Name, node.ID)
+					}
+				}
+			}
+		}
+	}
+
+	// iterate over the directories the second time for edges only
+	for _, dir := range dirs {
+		if dir.IsDir() {
+			// get all the json files in the directory
+			files, err := os.ReadDir(filepath.Join(db.configPath, dir.Name()))
+			if err != nil {
+				return err
+			}
+			// iterate over the files
+			for _, file := range files {
+				// read the json file
+				data, err := ReadJSONFile(filepath.Join(db.configPath, dir.Name(), file.Name()))
+				if err != nil {
+					return err
+				}
+
+				// check if the from node and to node exist with checkNodeNameExists method
+				if !db.checkNodeNameExists(data["From"].(string)) {
+					return fmt.Errorf("node with name %s does not exist", data["From"].(string))
+				}
+
+				if !db.checkNodeNameExists(data["To"].(string)) {
+					return fmt.Errorf("node with name %s does not exist", data["To"].(string))
+				}
+				// check if the data is an edge
+				if checkType(data) == "edge" {
+					// check if the edge has the data field
+					if _, ok := data["Data"]; !ok {
+						// create a new edge
+						edge, err := NewEdge(
+							WithEID(data["ID"].(string)),
+							WithEName(data["Relationship"].(string)),
+							WithECollection(data["Collection"].(string)),
+							WithEFrom(db.Nodes[data["From"].(string)]),
+							WithETo(db.Nodes[data["To"].(string)]),
+						)
+						if err != nil {
+							return err
+						}
+						// add the edge to the db.Edges
+						db.Edges[edge.ID] = edge
+					} else {
+						// create a new edge with the data field
+						edge, err := NewEdge(
+							WithEID(data["ID"].(string)),
+							WithEName(data["Relationship"].(string)),
+							WithECollection(data["Collection"].(string)),
+							WithEFrom(db.Nodes[data["From"].(string)]),
+							WithETo(db.Nodes[data["To"].(string)]),
+							WithEData(data["Data"].(map[string]interface{})),
+						)
+						if err != nil {
+							return err
+						}
+						// add the edge to the db.Edges
+						db.Edges[edge.ID] = edge
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// Disconnect() error
+// 将内存中的数据写入到本地文件
+func (db *InMemoryDB) Disconnect() error {
+	// iterate over the db.Nodes
+	// write the node to the file
+	for _, node := range db.Nodes {
+		err := WriteJSONFile(filepath.Join(db.configPath, node.Collection, node.Name+".json"), node.Export())
+		if err != nil {
+			return err
+		}
+	}
+
+	// iterate over the db.Edges
+	// write the edge to the file
+	for _, edge := range db.Edges {
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Relationship+".json"), edge.Export())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+// - CRUD operations
+// + Create operations
+// AddNode(n Node) (interface{}, error)
+
+func (db *InMemoryDB) AddNode(ni handler.Node) (interface{}, error) {
+	db.m.Lock()
+	defer db.m.Unlock()
+	// check ni type
+	// if ni is a pointer, use ni.(*Node)
+	// if ni is a value, use ni.(Node)
+	var n Node
+	switch v := ni.(type) {
+	// case Node: // removed as Node cannot have dynamic type Node
+	// 	n = v
+	case *Node:
+		n = *v
+	default:
+		return nil, fmt.Errorf("invalid input")
+	}
+
+
+	// check if node has mandatory fields
+	if n.ID == "" {
+		// give uuid
+		n.ID = uuid.New().String()
+	} else {
+		// check if the ID is already in the Nodes
+		if _, ok := db.Nodes[n.ID]; ok {
+			return nil, fmt.Errorf("node with ID %s already exists", n.ID)
+		}
+	}
+	if n.Name == "" {
+		return nil, fmt.Errorf("node name is required")
+	} else {
+		// check if the name is already in the nodeNameSet by checkNodeNameExists
+		if db.checkNodeNameExists(n.Name) {
+			return nil, fmt.Errorf("node with name %s already exists", n.GetName())
+		}
+	}
+	if n.Collection == "" {
+		return nil, fmt.Errorf("node collection is required")
+	}
+
+	// add the node to the Nodes and NodeNameMap
+	db.Nodes[n.ID] = &n
+	// add the node id and name to the bidimap
+	db.NodeNameMap.Put(n.Name, n.ID)
+	// add the nodename to the nodeNameSet
+	db.nodeNameSet[n.Name] = void{}
+	return n.ID, nil
+}
+
+// AddEdge(e Edge) (interface{}, error)
+func (db *InMemoryDB) AddEdge(ei handler.Edge) (interface{}, error) {
+	db.m.Lock()
+	defer db.m.Unlock()
+	// check ei type
+	// if ei is a pointer, use ei.(*Edge)
+	// if ei is a value, use ei.(Edge)
+	var e Edge
+	switch v := ei.(type) {
+	// case Edge: // removed as Edge cannot have dynamic type Edge
+	// 	e = v
+	case *Edge:
+		e = *v
+	default:
+		return nil, fmt.Errorf("invalid input")
+	}
+
+	// check if edge has mandatory fields
+	if e.ID == "" {
+		// give uuid
+		e.ID = uuid.New().String()
+	} else {
+		// check if the ID is already in the Edges
+		if _, ok := db.Edges[e.ID]; ok {
+			return nil, fmt.Errorf("edge with ID %s already exists", e.ID)
+		}
+	}
+	if e.Relationship == "" {
+		return nil, fmt.Errorf("edge name is required")
+	} 
+	if e.Collection == "" {
+		return nil, fmt.Errorf("edge collection is required")
+	}
+	if e.From == nil {
+		return nil, fmt.Errorf("edge from node is required")
+	} else{
+		// check if the from node exists
+		if _, ok := db.Nodes[e.From.ID]; !ok {
+			return nil, fmt.Errorf("node with ID %s does not exist", e.From.ID)
+		}
+	}
+	if e.To == nil {
+		return nil, fmt.Errorf("edge to node is required")
+	} else {
+		// check if the to node exists
+		if _, ok := db.Nodes[e.To.ID]; !ok {
+			return nil, fmt.Errorf("node with ID %s does not exist", e.To.ID)
+		}
+	}
+
+	// add the edge to the Edges and EdgeNameMap
+	db.Edges[e.ID] = &e
+
+	return e.ID, nil
+}
+// // + Update operations
+// ReplaceNode(n Node) error
+// ReplaceEdge(e Edge) error
+// UpdateNode(n Node) error
+// UpdateEdge(e Edge) error
+// MergeNode(n Node) error
+// MergeEdge(e Edge) error
+// // + Delete operations
+// DeleteNode(name interface{}) error
+// DeleteItemByID(id interface{}) error
+
+// // + Query operations
+// GetItemByID(id interface{}) (interface{}, error)
+// GetNode(name interface{}) (Node, error)
+// GetNodesByRegex(regex string) ([]Node, error)
+// GetEdgesByRegex(regex string) ([]Edge, error)
+
+// GetFromNodes(name interface{}) ([]Node, error)
+// GetToNodes(name interface{}) ([]Node, error)
+// GetInEdges(name interface{}) ([]Edge, error)
+// GetOutEdges(name interface{}) ([]Edge, error)
+
+// // + Graph operations
+// // - Traversal operations
+// GetAllRelatedNodes(name interface{}) ([][]Node, error)
+// GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
+// GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
 
 // ~ 01 Fundamental Function Section
 
@@ -131,128 +490,11 @@ func (db *InMemoryDB) BFSWithWeightRange(startID string, minWeight, maxWeight in
 	return result
 }
 
-
 // ~ 01 Fundamental Function Section End
 
 // ~ 02 Handler Interface Inplemetation Section
-// Init 用于初始化图数据库
-func (db *InMemoryDB) Init(yamlPath string) error {
-	// read the config yaml file from the yamlPath
-	// parse the yaml file and set the
-	// db.configPath is equal to dataPath field in the yaml file
-	// read the yaml file
-	yamlData, err := os.ReadFile(yamlPath)
-
-	if err != nil {
-		return err
-	}
-
-	// unmarshal the yaml data into a map
-	var data map[string]interface{}
-	err = yaml.Unmarshal(yamlData, &data)
-
-	if err != nil {
-		return err
-	}
-
-	// set the db.configPath
-	dataPath, ok := data["dataPath"].(string)
-	if !ok {
-		return fmt.Errorf("dataPath is not a string")
-	}
-	db.configPath = dataPath
-	return nil
-}
 
 // Connect 用于连接图数据库
-// 读取本地文件并将其内容加载到内存中
-func (db *InMemoryDB) Connect() error {
-	// read the configPath file
-	// every collection is a directory in the configPath
-	// get all the json files in each collection
-	// read the json files and check if it is a node or an edge
-	// add the node or edge to the db.Nodes or db.Edges
-
-	// get all the directories in the configPath
-	dirs, err := os.ReadDir(db.configPath)
-	if err != nil {
-		return err
-	}
-
-	// iterate over the directories
-	for _, dir := range dirs {
-		// check if the directory is a directory
-		if !dir.IsDir() {
-			// InMemoryDB.json file is just for other query
-			// the node and edge files are dominant in creating the graph
-		} else {
-			// get the name of the directory
-			collection := dir.Name()
-			// get all the files in the directory
-			files, err := os.ReadDir(filepath.Join(db.configPath, collection))
-			if err != nil {
-				return err
-			}
-
-			// iterate over the files
-			for _, file := range files {
-				// get the name of the file
-				fileName := file.Name()
-				// get the path of the file
-				filePath := filepath.Join(db.configPath, collection, fileName)
-
-				// read the file
-				data, err := ReadJSONFile(filePath)
-				if err != nil {
-					return err
-				}
-
-				// check if the file is a node or an edge
-				if _, ok := data["From"]; ok {
-					// create an edge
-					from, to := data["From"].(string), data["To"].(string)
-					tmpWeight, ok := data["Weight"].(float64)
-					if !ok {
-						tmpWeight, _ = strconv.ParseFloat(data["Weight"].(string), 64)
-					}
-
-					edge, err := NewEdge(
-						WithEID(data["ID"].(string)),
-						WithEName(data["Name"].(string)),
-						WithECollection(collection), // should be the same as the data["Collection"] field
-						WithEFrom(db.Nodes[from]),
-						WithETo(db.Nodes[to]),
-						WithEWeight(int(tmpWeight)),
-						WithEData(data))
-
-					if err != nil {
-						return err
-					}
-
-					db.Edges[edge.ID] = edge
-					// add the edge id and name to the bidimap
-					db.EdgeNameMap.Put(edge.ID, edge.Name)
-				} else {
-					// create a node
-					node, err := NewNode(
-						WithNID(data["ID"].(string)),
-						WithNName(data["Name"].(string)),
-						WithNCollection(collection),
-						WithNData(data))
-					if err != nil {
-						return err
-					}
-
-					db.Nodes[node.ID] = node
-					// add the node id and name to the bidimap
-					db.NodeNameMap.Put(node.ID, node.Name)
-				}
-			}
-		}
-	}
-
-	return nil
-}
 
 // Disconnect 用于断开图数据库的连接
 // 将内存中的数据写入到本地文件
@@ -269,7 +511,7 @@ func (db *InMemoryDB) Disconnect() error {
 	// iterate over the db.Edges
 	// write the edge to the file
 	for _, edge := range db.Edges {
-		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Name+".json"), edge.Export())
+		err := WriteJSONFile(filepath.Join(db.configPath, edge.Collection, edge.Relationship+".json"), edge.Export())
 		if err != nil {
 			return err
 		}
@@ -283,7 +525,6 @@ func (db *InMemoryDB) Disconnect() error {
 
 	return nil
 }
-
 
 // & AddFunc Section
 func (db *InMemoryDB) AddNode(n *Node) error {
@@ -321,7 +562,6 @@ func (db *InMemoryDB) AddNode(n *Node) error {
 	return nil
 }
 
-
 func (db *InMemoryDB) AddEdge(e *Edge) error {
 	db.m.Lock()
 	defer db.m.Unlock()
@@ -329,7 +569,7 @@ func (db *InMemoryDB) AddEdge(e *Edge) error {
 	if e.ID == "" {
 		return fmt.Errorf("edge ID is required")
 	}
-	if e.Name == "" {
+	if e.Relationship == "" {
 		return fmt.Errorf("edge name is required")
 	}
 	if e.Collection == "" {
@@ -346,29 +586,28 @@ func (db *InMemoryDB) AddEdge(e *Edge) error {
 		return fmt.Errorf("edge with ID %s already exists", e.ID)
 	}
 	// check if the name is already in the edgeNameSet by checkEdgeNameExists
-	if  db.checkEdgeNameExists(e.Name) {
-		return fmt.Errorf("edge with name %s already exists", e.Name)
+	if db.checkEdgeNameExists(e.Relationship) {
+		return fmt.Errorf("edge with name %s already exists", e.Relationship)
 	}
 	// check if the name is already in the EdgeNameMap
-	if _, ok := db.EdgeNameMap.Get(e.Name); ok {
-		return fmt.Errorf("edge with name %s already exists", e.Name)
+	if _, ok := db.EdgeNameMap.Get(e.Relationship); ok {
+		return fmt.Errorf("edge with name %s already exists", e.Relationship)
 	}
 
 	// add the edge to the Edges and EdgeNameMap
 	db.Edges[e.ID] = e
 	// add the edge id and name to the bidimap
-	db.EdgeNameMap.Put(e.Name, e.ID)
+	db.EdgeNameMap.Put(e.Relationship, e.ID)
 	// add the edgeName to the edgeNameSet
-	db.edgeNameSet[e.Name] = void{}
+	db.edgeNameSet[e.Relationship] = void{}
 
 	return nil
 }
 
-
 // ~ Read Func Section
 
 // get node id with the node name, regexp function is used
-// regStr is the str to build regular expression 
+// regStr is the str to build regular expression
 // targetStr is the string to be matched
 type regexpFunc func(targetStr string, regStr string) bool
 
@@ -391,7 +630,6 @@ func (db *InMemoryDB) GetNodeIDs(SearchChars string, regfunc regexpFunc) ([]stri
 
 	return result, nil
 }
-
 
 func (db *InMemoryDB) GetNodeDB(id string) (map[string]interface{}, error) {
 	db.m.RLock()
@@ -420,7 +658,8 @@ func (db *InMemoryDB) GetEdgeDB(id string) (map[string]interface{}, error) {
 	}
 	return nil, fmt.Errorf("edge with ID %s does not exist", id)
 }
-//  Given a node ID, GetFromVertices returns a list of node IDs that have an edge pointing to the specified node.
+
+// Given a node ID, GetFromVertices returns a list of node IDs that have an edge pointing to the specified node.
 func (db *InMemoryDB) GetFromNodes(id string) ([]string, error) {
 	db.m.RLock()
 	defer db.m.RUnlock()
@@ -457,6 +696,7 @@ func (db *InMemoryDB) GetToNodes(id string) ([]string, error) {
 
 	return toVertices, nil
 }
+
 // Given a node ID, GetInEdges returns a list of edge IDs that point to the specified node.
 func (db *InMemoryDB) GetInEdges(id string) ([]string, error) {
 	db.m.RLock()
@@ -475,6 +715,7 @@ func (db *InMemoryDB) GetInEdges(id string) ([]string, error) {
 
 	return inEdges, nil
 }
+
 // Given a node ID, GetOutEdges returns a list of edge IDs that start from the specified node.
 func (db *InMemoryDB) GetOutEdges(id string) ([]string, error) {
 	db.m.RLock()
@@ -493,8 +734,6 @@ func (db *InMemoryDB) GetOutEdges(id string) ([]string, error) {
 
 	return outEdges, nil
 }
-
-
 
 // ~ Update Func Section
 // UpdateNodeData updates the data of a node with the specified ID.
@@ -550,7 +789,6 @@ func (db *InMemoryDB) UpdateEdge(e *Edge) error {
 	db.Edges[e.ID] = e
 	return nil
 }
-
 
 // ~ Delete Func Section
 func (db *InMemoryDB) DeleteNode(id string) error {

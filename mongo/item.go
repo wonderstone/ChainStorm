@@ -26,7 +26,7 @@ type Node struct {
 	Data       map[string]interface{} `bson:"data"`
 }
 
-func (v Node) Export() map[string]interface{} {
+func (v *Node) Export() map[string]interface{} {
 	return map[string]interface{}{
 		"collection": v.Collection,
 		"name":       v.Name,
@@ -99,7 +99,7 @@ type Edge struct {
 	Data         map[string]interface{} `bson:"data,omitempty"`
 }
 
-func (e Edge) Export() map[string]interface{} {
+func (e *Edge) Export() map[string]interface{} {
 	return map[string]interface{}{
 		"from":         e.From,
 		"to":           e.To,
@@ -403,8 +403,6 @@ func (mg *MongoGraph) AddNode(ni handler.Node) (interface{}, error) {
 	// if ni is a value, use ni.(Node)
 	var n Node
 	switch v := ni.(type) {
-	case Node:
-		n = v
 	case *Node:
 		n = *v
 	default:
@@ -447,8 +445,6 @@ func (mg *MongoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 	// if ei is a value, use ei.(Edge)
 	var e Edge
 	switch v := ei.(type) {
-	case Edge:
-		e = v
 	case *Edge:
 		e = *v
 	default:
@@ -505,7 +501,7 @@ func (mg *MongoGraph) GetNode(name interface{}) (handler.Node, error) {
 	if _, ok := name.(string); ok {
 		// get the collection name
 		if _, ok := mg.nodeNameCollMap[name.(string)]; !ok {
-			return Node{}, fmt.Errorf("Node not found")
+			return &Node{}, fmt.Errorf("Node not found")
 		}
 		colName := mg.nodeNameCollMap[name.(string)]
 		nodeName := name.(string)
@@ -515,11 +511,11 @@ func (mg *MongoGraph) GetNode(name interface{}) (handler.Node, error) {
 		var node Node
 		err = verticesCol.FindOne(context.TODO(), bson.M{"name": nodeName}).Decode(&node)
 		if err != nil {
-			return Node{}, err
+			return &Node{}, err
 		}
-		return node, nil
+		return &node, nil
 	} else {
-		return Node{}, fmt.Errorf("invalid input, should be string")
+		return &Node{}, fmt.Errorf("invalid input, should be string")
 	}
 
 }
@@ -530,7 +526,7 @@ func (mg *MongoGraph) GetNode(name interface{}) (handler.Node, error) {
 func (mg *MongoGraph) GetItemByID(id interface{}) (interface{}, error) {
 	var err error
 	defer recoverFromPanic(&err)
-	fmt.Println("ID", id)
+	// fmt.Println("ID", id)
 	// get the database
 	db := mg.client.Database(mg.database)
 
@@ -592,7 +588,7 @@ func (mg *MongoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
 			if errtmp != nil {
 				return nil, errtmp
 			}
-			nodes = append(nodes, tmpNode)
+			nodes = append(nodes, &tmpNode)
 		}
 
 	}
@@ -635,7 +631,7 @@ func (mg *MongoGraph) GetEdgesByRegex(regex string) ([]handler.Edge, error) {
 			if errtmp != nil {
 				return nil, errtmp
 			}
-			edges = append(edges, tmpEdge)
+			edges = append(edges, &tmpEdge)
 		}
 
 	}
@@ -650,7 +646,7 @@ func (mg *MongoGraph) GetFromNodes(name interface{}) ([]handler.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the from nodes
@@ -693,7 +689,7 @@ func (mg *MongoGraph) GetFromNodes(name interface{}) ([]handler.Node, error) {
 				return nil, errtmp
 			}
 
-			fromNodes = append(fromNodes, tmpNode)
+			fromNodes = append(fromNodes, &tmpNode)
 		}
 
 	}
@@ -708,7 +704,7 @@ func (mg *MongoGraph) GetFromNodesInEdges(name interface{}, edges ...handler.Edg
 
 	// iter the edges to get the edgeSet
 	for _, edgetmp := range edges {
-		edge := edgetmp.(Edge)
+		edge := edgetmp.(*Edge)
 		edgeSet[edge.ID.Hex()] = void{}
 	}
 
@@ -717,7 +713,7 @@ func (mg *MongoGraph) GetFromNodesInEdges(name interface{}, edges ...handler.Edg
 	if err != nil {
 		return nil, err
 	}
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the from nodes
@@ -766,7 +762,7 @@ func (mg *MongoGraph) GetFromNodesInEdges(name interface{}, edges ...handler.Edg
 				return nil, errtmp
 			}
 
-			fromNodes = append(fromNodes, tmpNode)
+			fromNodes = append(fromNodes, &tmpNode)
 		}
 
 	}
@@ -781,7 +777,7 @@ func (mg *MongoGraph) GetToNodes(name interface{}) ([]handler.Node, error) {
 		return nil, err
 	}
 
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the to nodes
@@ -824,7 +820,7 @@ func (mg *MongoGraph) GetToNodes(name interface{}) ([]handler.Node, error) {
 				return nil, errtmp
 			}
 
-			toNodes = append(toNodes, tmpNode)
+			toNodes = append(toNodes, &tmpNode)
 		}
 
 	}
@@ -837,7 +833,7 @@ func (mg *MongoGraph) GetToNodesInEdges(name interface{}, edges ...handler.Edge)
 
 	// iter the edges to get the edgeSet
 	for _, edgetmp := range edges {
-		edge := edgetmp.(Edge)
+		edge := edgetmp.(*Edge)
 		edgeSet[edge.ID.Hex()] = void{}
 	}
 
@@ -846,7 +842,7 @@ func (mg *MongoGraph) GetToNodesInEdges(name interface{}, edges ...handler.Edge)
 	if err != nil {
 		return nil, err
 	}
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the to nodes
@@ -895,7 +891,7 @@ func (mg *MongoGraph) GetToNodesInEdges(name interface{}, edges ...handler.Edge)
 				return nil, errtmp
 			}
 
-			toNodes = append(toNodes, tmpNode)
+			toNodes = append(toNodes, &tmpNode)
 		}
 
 	}
@@ -909,7 +905,7 @@ func (mg *MongoGraph) GetInEdges(name interface{}) ([]handler.Edge, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the in edges
@@ -961,7 +957,7 @@ func (mg *MongoGraph) GetInEdges(name interface{}) ([]handler.Edge, error) {
 				return nil, errtmp
 			}
 
-			inEdges = append(inEdges, tmpEdge)
+			inEdges = append(inEdges, &tmpEdge)
 		}
 
 	}
@@ -975,7 +971,7 @@ func (mg *MongoGraph) GetOutEdges(name interface{}) ([]handler.Edge, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := nodetmp.(Node)
+	node := nodetmp.(*Node)
 	// get the database
 	db := mg.client.Database(mg.database)
 	// iter the items in the database to get the out edges
@@ -1018,7 +1014,7 @@ func (mg *MongoGraph) GetOutEdges(name interface{}) ([]handler.Edge, error) {
 				return nil, errtmp
 			}
 
-			outEdges = append(outEdges, tmpEdge)
+			outEdges = append(outEdges, &tmpEdge)
 		}
 
 	}
@@ -1036,8 +1032,6 @@ func (mg *MongoGraph) ReplaceNode(ni handler.Node) error {
 	// if ni is a value, use ni.(Node)
 	var n Node
 	switch v := ni.(type) {
-	case Node:
-		n = v
 	case *Node:
 		n = *v
 	default:
@@ -1063,8 +1057,6 @@ func (mg *MongoGraph) ReplaceEdge(ei handler.Edge) error {
 
 	var e Edge
 	switch v := ei.(type) {
-	case Edge:
-		e = v
 	case *Edge:
 		e = *v
 	default:
@@ -1091,8 +1083,6 @@ func (mg *MongoGraph) UpdateNode(ntmp handler.Node) error {
 
 	var n Node
 	switch v := ntmp.(type) {
-	case Node:
-		n = v
 	case *Node:
 		n = *v
 	default:
@@ -1117,8 +1107,6 @@ func (mg *MongoGraph) UpdateEdge(etmp handler.Edge) error {
 	defer recoverFromPanic(&err)
 	var e Edge
 	switch v := etmp.(type) {
-	case Edge:
-		e = v
 	case *Edge:
 		e = *v
 	default:
@@ -1146,8 +1134,6 @@ func (mg *MongoGraph) MergeNode(ntmp handler.Node) error {
 	defer recoverFromPanic(&err)
 	var n Node
 	switch v := ntmp.(type) {
-	case Node:
-		n = v
 	case *Node:
 		n = *v
 	default:
@@ -1195,8 +1181,6 @@ func (mg *MongoGraph) MergeEdge(etmp handler.Edge) error {
 	defer recoverFromPanic(&err)
 	var e Edge
 	switch v := etmp.(type) {
-	case Edge:
-		e = v
 	case *Edge:
 		e = *v
 	default:
@@ -1332,163 +1316,281 @@ func (mg *MongoGraph) DeleteItemByID(id interface{}) error {
 // GetAllRelatedNodes(name interface{}) ([][]Node, error)
 // like BFS, get all the related nodes,
 // the first dimension is the level, the second dimension is the nodes in the level
+// need to avoid the circle
 func (mg *MongoGraph) GetAllRelatedNodes(name interface{}) ([][]handler.Node, error) {
-	// get the node by name
-	nodetmp, err := mg.GetNode(name)
-	if err != nil {
-		return nil, err
-	}
-	node := nodetmp.(Node)
-	// get all the related nodes
-	var relatedNodes [][]handler.Node
-	// the related nodes in the current level
-	var currentLevelNodes []handler.Node
-	// the related nodes in the next level
-	var nextLevelNodes []handler.Node
-	// the related nodes in the current level
-	currentLevelNodes = append(currentLevelNodes, node)
-	// the related nodes in the first level
-	relatedNodes = append(relatedNodes, currentLevelNodes)
+    var err error
+    defer recoverFromPanic(&err)
 
-	// get all the related nodes
-	for {
-		// get the related nodes in the current level
-		for _, ntmp := range currentLevelNodes {
-			n := ntmp.(Node)
-			// get the from nodes
-			fromNodes, err := mg.GetFromNodes(n.Name)
-			if err != nil {
-				return nil, err
-			}
-			// get the to nodes
-			toNodes, err := mg.GetToNodes(n.Name)
-			if err != nil {
-				return nil, err
-			}
-			// append the from nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, fromNodes...)
-			// append the to nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, toNodes...)
-		}
-		// if there is no next level nodes, break
-		if len(nextLevelNodes) == 0 {
+    // Get the starting node by name
+    staNode, err := mg.GetNode(name)
+    if err != nil {
+        return nil, err
+    }
+
+	// convert the node to Node
+	startNode := staNode.(*Node)
+    // Initialize the BFS queue and visited set
+    queue := []handler.Node{startNode}
+    visited := make(map[string]bool)
+    visited[startNode.ID.Hex()] = true
+
+    // Initialize the result to store nodes level-wise
+    var result [][]handler.Node
+    currentLevel := []handler.Node{startNode}
+
+    for len(queue) > 0 {
+        var nextLevel []handler.Node
+
+        // Process all nodes in the current level
+        for _, node := range currentLevel {
+			// node type conversion
+			node := node.(*Node)
+            // Get all related nodes (both incoming and outgoing edges)
+            fromNodes, err := mg.GetFromNodes(node.Name)
+            if err != nil {
+                return nil, err
+            }
+            toNodes, err := mg.GetToNodes(node.Name)
+            if err != nil {
+                return nil, err
+            }
+
+            // Combine fromNodes and toNodes
+            relatedNodes := append(fromNodes, toNodes...)
+
+            // Add unvisited related nodes to the next level
+            for _, relatedNode := range relatedNodes {
+				// node type conversion
+				relatedNode := relatedNode.(*Node)
+                if !visited[relatedNode.ID.Hex()] {
+                    visited[relatedNode.ID.Hex()] = true
+                    nextLevel = append(nextLevel, relatedNode)
+                    queue = append(queue, relatedNode)
+                }
+            }
+        }
+
+        // Add the current level to the result
+        result = append(result, currentLevel)
+		// ! check if the next level is empty
+		if len(nextLevel) == 0 {
 			break
 		}
-		// append the next level nodes to the related nodes
-		relatedNodes = append(relatedNodes, nextLevelNodes)
-		// update the current level nodes
-		currentLevelNodes = nextLevelNodes
-		// clear the next level nodes
-		nextLevelNodes = nil
-	}
-	return relatedNodes, nil
-}
 
-// GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
+        // Move to the next level
+        currentLevel = nextLevel
+        queue = queue[len(currentLevel):]
+    }
 
-func (mg *MongoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...handler.Edge) ([][]handler.Node, error) {
-	// get the node by name
-	node, err := mg.GetNode(name)
-	if err != nil {
-		return nil, err
-	}
-
-	// get all the related nodes
-	var relatedNodes [][]handler.Node
-	// the related nodes in the current level
-	var currentLevelNodes []handler.Node
-	// the related nodes in the next level
-	var nextLevelNodes []handler.Node
-	// the related nodes in the current level
-	currentLevelNodes = append(currentLevelNodes, node)
-	// the related nodes in the first level
-	relatedNodes = append(relatedNodes, currentLevelNodes)
-
-	// get all the related nodes
-	for {
-		// get the related nodes in the current level
-		for _, ntmp := range currentLevelNodes {
-			n := ntmp.(Node)
-			// get the from nodes
-			fromNodes, err := mg.GetFromNodesInEdges(n.Name, EdgeSlice...)
-			if err != nil {
-				return nil, err
-			}
-			// get the to nodes
-			toNodes, err := mg.GetToNodesInEdges(n.Name, EdgeSlice...)
-			if err != nil {
-				return nil, err
-			}
-			// append the from nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, fromNodes...)
-			// append the to nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, toNodes...)
-		}
-		// if there is no next level nodes, break
-		if len(nextLevelNodes) == 0 {
-			break
-		}
-		// append the next level nodes to the related nodes
-		relatedNodes = append(relatedNodes, nextLevelNodes)
-		// update the current level nodes
-		currentLevelNodes = nextLevelNodes
-		// clear the next level nodes
-		nextLevelNodes = nil
-	}
-	return relatedNodes, nil
-
+    return result, nil
 }
 
 // GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
 // get all the related nodes in the range of max levels
+// similar to GetAllRelatedNodes, but with a max level
+// need to avoid the circle
+
 func (mg *MongoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][]handler.Node, error) {
-	// get the node by name
-	node, err := mg.GetNode(name)
+	var err error
+	defer recoverFromPanic(&err)
+
+	// Get the starting node by name
+	staNode, err := mg.GetNode(name)
 	if err != nil {
 		return nil, err
 	}
 
-	// get all the related nodes
-	var relatedNodes [][]handler.Node
-	// the related nodes in the current level
-	var currentLevelNodes []handler.Node
-	// the related nodes in the next level
-	var nextLevelNodes []handler.Node
-	// the related nodes in the current level
-	currentLevelNodes = append(currentLevelNodes, node)
-	// the related nodes in the first level
-	relatedNodes = append(relatedNodes, currentLevelNodes)
+	// convert the node to Node
+	startNode := staNode.(*Node)
+	// Initialize the BFS queue and visited set
+	queue := []handler.Node{startNode}
+	visited := make(map[string]bool)
+	visited[startNode.ID.Hex()] = true
 
-	// get all the related nodes
+	// Initialize the result to store nodes level-wise
+	var result [][]handler.Node
+	currentLevel := []handler.Node{startNode}
+
 	for i := 0; i < max; i++ {
-		// get the related nodes in the current level
-		for _, ntmp := range currentLevelNodes {
-			n := ntmp.(Node)
-			// get the from nodes
-			fromNodes, err := mg.GetFromNodes(n.Name)
+		var nextLevel []handler.Node
+
+		// Process all nodes in the current level
+		for _, node := range currentLevel {
+			// node type conversion
+			node := node.(*Node)
+			// Get all related nodes (both incoming and outgoing edges)
+			fromNodes, err := mg.GetFromNodes(node.Name)
 			if err != nil {
 				return nil, err
 			}
-			// get the to nodes
-			toNodes, err := mg.GetToNodes(n.Name)
+			toNodes, err := mg.GetToNodes(node.Name)
 			if err != nil {
 				return nil, err
 			}
-			// append the from nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, fromNodes...)
-			// append the to nodes to the next level nodes
-			nextLevelNodes = append(nextLevelNodes, toNodes...)
+
+			// Combine fromNodes and toNodes
+			relatedNodes := append(fromNodes, toNodes...)
+
+			// Add unvisited related nodes to the next level
+			for _, relatedNode := range relatedNodes {
+				// node type conversion
+				relatedNode := relatedNode.(*Node)
+				if !visited[relatedNode.ID.Hex()] {
+					visited[relatedNode.ID.Hex()] = true
+					nextLevel = append(nextLevel, relatedNode)
+					queue = append(queue, relatedNode)
+				}
+			}
 		}
-		// if there is no next level nodes, break
-		if len(nextLevelNodes) == 0 {
+
+		// Add the current level to the result
+		result = append(result, currentLevel)
+		// ! check if the next level is empty
+		if len(nextLevel) == 0 {
 			break
 		}
-		// append the next level nodes to the related nodes
-		relatedNodes = append(relatedNodes, nextLevelNodes)
-		// update the current level nodes
-		currentLevelNodes = nextLevelNodes
-		// clear the next level nodes
-		nextLevelNodes = nil
+
+		// Move to the next level
+		currentLevel = nextLevel
+		queue = queue[len(currentLevel):]
 	}
-	return relatedNodes, nil
+
+	return result, nil
 }
+
+
+
+// GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
+// similar to GetAllRelatedNodes, but only consider the edges in the EdgeSlice
+func (mg *MongoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...handler.Edge) ([][]handler.Node, error) {
+	var err error
+	defer recoverFromPanic(&err)
+
+	// Get the starting node by name
+	staNode, err := mg.GetNode(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert the node to Node
+	startNode := staNode.(*Node)
+	// Initialize the BFS queue and visited set
+	queue := []handler.Node{startNode}
+	visited := make(map[string]bool)
+	visited[startNode.ID.Hex()] = true
+
+	// Initialize the result to store nodes level-wise
+	var result [][]handler.Node
+	currentLevel := []handler.Node{startNode}
+
+	for len(queue) > 0 {
+		var nextLevel []handler.Node
+
+		// Process all nodes in the current level
+		for _, node := range currentLevel {
+			// node type conversion
+			node := node.(*Node)
+			// Get all related nodes (both incoming and outgoing edges)
+			fromNodes, err := mg.GetFromNodesInEdges(node.Name, EdgeSlice...)
+			if err != nil {
+				return nil, err
+			}
+			toNodes, err := mg.GetToNodesInEdges(node.Name, EdgeSlice...)
+			if err != nil {
+				return nil, err
+			}
+
+			// Combine fromNodes and toNodes
+			relatedNodes := append(fromNodes, toNodes...)
+
+			// Add unvisited related nodes to the next level
+			for _, relatedNode := range relatedNodes {
+				// node type conversion
+				relatedNode := relatedNode.(*Node)
+				if !visited[relatedNode.ID.Hex()] {
+					visited[relatedNode.ID.Hex()] = true
+					nextLevel = append(nextLevel, relatedNode)
+					queue = append(queue, relatedNode)
+				}
+			}
+		}
+
+		// Add the current level to the result
+		result = append(result, currentLevel)
+		// ! check if the next level is empty
+		if len(nextLevel) == 0 {
+			break
+		}
+
+		// Move to the next level
+		currentLevel = nextLevel
+		queue = queue[len(currentLevel):]
+	}
+
+	return result, nil
+}
+
+
+
+
+
+
+
+
+
+
+
+
+// func (mg *MongoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...handler.Edge) ([][]handler.Node, error) {
+// 	// get the node by name
+// 	node, err := mg.GetNode(name)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	// get all the related nodes
+// 	var relatedNodes [][]handler.Node
+// 	// the related nodes in the current level
+// 	var currentLevelNodes []handler.Node
+// 	// the related nodes in the next level
+// 	var nextLevelNodes []handler.Node
+// 	// the related nodes in the current level
+// 	currentLevelNodes = append(currentLevelNodes, node)
+// 	// the related nodes in the first level
+// 	relatedNodes = append(relatedNodes, currentLevelNodes)
+
+// 	// get all the related nodes
+// 	for {
+// 		// get the related nodes in the current level
+// 		for _, ntmp := range currentLevelNodes {
+// 			n := ntmp.(Node)
+// 			// get the from nodes
+// 			fromNodes, err := mg.GetFromNodesInEdges(n.Name, EdgeSlice...)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			// get the to nodes
+// 			toNodes, err := mg.GetToNodesInEdges(n.Name, EdgeSlice...)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			// append the from nodes to the next level nodes
+// 			nextLevelNodes = append(nextLevelNodes, fromNodes...)
+// 			// append the to nodes to the next level nodes
+// 			nextLevelNodes = append(nextLevelNodes, toNodes...)
+// 		}
+// 		// if there is no next level nodes, break
+// 		if len(nextLevelNodes) == 0 {
+// 			break
+// 		}
+// 		// append the next level nodes to the related nodes
+// 		relatedNodes = append(relatedNodes, nextLevelNodes)
+// 		// update the current level nodes
+// 		currentLevelNodes = nextLevelNodes
+// 		// clear the next level nodes
+// 		nextLevelNodes = nil
+// 	}
+// 	return relatedNodes, nil
+
+// }
+

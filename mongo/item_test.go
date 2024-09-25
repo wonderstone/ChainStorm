@@ -262,13 +262,13 @@ func TestCRUDNode(t *testing.T) {
 	}
 
 	// + add the second node by passing the value
-	res02, err02 := mg.AddNode(node02)
+	res02, err02 := mg.AddNode(&node02)
 	if err02 != nil {
 		t.Errorf("Error: %v", err02)
 	}
 
 	// - add the first node again should fail
-	_, err01_Fail := mg.AddNode(node01)
+	_, err01_Fail := mg.AddNode(&node01)
 	if err01_Fail == nil {
 		t.Errorf("Expected error, got nil")
 	}
@@ -291,7 +291,7 @@ func TestCRUDNode(t *testing.T) {
 		},
 	}
 	// + add the edge
-	res_e, err_e := mg.AddEdge(edge)
+	res_e, err_e := mg.AddEdge(&edge)
 	if err_e != nil {
 		t.Errorf("Error: %v", err_e)
 	}
@@ -309,7 +309,7 @@ func TestCRUDNode(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 
-	n := node.(Node)
+	n := node.(*Node)
 
 	newNode := Node{
 		ID:         n.ID,
@@ -331,7 +331,7 @@ func TestCRUDNode(t *testing.T) {
 		},
 	}
 
-	err3 := mg.ReplaceNode(newNode)
+	err3 := mg.ReplaceNode(&newNode)
 	if err3 != nil {
 		t.Errorf("Error: %v", err3)
 	}
@@ -350,7 +350,7 @@ func TestCRUDNode(t *testing.T) {
 
 	// get the first edge
 	edge1 := edges[0]
-	e := edge1.(Edge)
+	e := edge1.(*Edge)
 	// create a new edge with the same id
 	newEdge := Edge{
 		ID:           e.ID,
@@ -364,7 +364,7 @@ func TestCRUDNode(t *testing.T) {
 		},
 	}
 
-	err5 := mg.ReplaceEdge(newEdge)
+	err5 := mg.ReplaceEdge(&newEdge)
 	if err5 != nil {
 		t.Errorf("Error: %v", err5)
 	}
@@ -380,7 +380,7 @@ func TestCRUDNode(t *testing.T) {
 	//! node collection should not be changed, or it will be a new node
 	newNode.Name = "AliBaba"
 	newNode.Data["location"] = "Hangzhou"
-	err7 := mg.UpdateNode(newNode)
+	err7 := mg.UpdateNode(&newNode)
 	if err7 != nil {
 		t.Errorf("Error: %v", err7)
 	}
@@ -389,7 +389,7 @@ func TestCRUDNode(t *testing.T) {
 	//! edge collection should not be changed, or it will be a new edge
 	newEdge.Relationship = "partnership ++++++++"
 	newEdge.Data["relation"] = "CCC +"
-	err8 := mg.UpdateEdge(newEdge)
+	err8 := mg.UpdateEdge(&newEdge)
 	if err8 != nil {
 		t.Errorf("Error: %v", err8)
 	}
@@ -397,14 +397,14 @@ func TestCRUDNode(t *testing.T) {
 	//+ MergeNode(n Node) error
 
 	newNode.Data["BB location"] = "Hangzhou + Shanghai"
-	err9 := mg.MergeNode(newNode)
+	err9 := mg.MergeNode(&newNode)
 	if err9 != nil {
 		t.Errorf("Error: %v", err9)
 	}
 
 	//+ MergeEdge(e Edge) error
 	newEdge.Data["BB relation"] = "CCC ++++++++"
-	err10 := mg.MergeEdge(newEdge)
+	err10 := mg.MergeEdge(&newEdge)
 	if err10 != nil {
 		t.Errorf("Error: %v", err10)
 	}
@@ -634,7 +634,35 @@ func TestGet(t *testing.T) {
 	}
 
 	fmt.Println(outEdges)
+
+
+	// + Graph operations
+	// - Traversal operations
+	nodeslice, errgo:=mg.GetAllRelatedNodes("Apple")
+	if errgo != nil {
+		t.Errorf("Error: %v", errgo)
+	}
+
+	fmt.Println(nodeslice)
+
+	nodeslice1, errgo1:=mg.GetAllRelatedNodesInEdgeSlice("Apple", &edge, &edge1)
+	if errgo1 != nil {
+		t.Errorf("Error: %v", errgo1)
+	}
+
+
+	fmt.Println(nodeslice1)
+
+
+	nodeslice2, errgo2:=mg.GetAllRelatedNodesInRange("Apple", 2)
+	if errgo2 != nil {
+		t.Errorf("Error: %v", errgo2)
+	}
+
+	fmt.Println(nodeslice2)
+
 	
+
 
 
 }
