@@ -1,67 +1,73 @@
 package arango
 
-// import (
-// 	"context"
-// 	"fmt"
-// 	"log"
-// 	"os"
-// 	"strconv"
+import (
+	driver "github.com/arangodb/go-driver"
+)
 
-// 	"github.com/arangodb/go-driver"
-// 	"github.com/arangodb/go-driver/http"
-// 	"gopkg.in/yaml.v3"
-// )
+type Node struct {
+	ID         string                 `bson:"_id,omitempty"`
+	Collection string                 `bson:"collection"`
+	Name       string                 `bson:"name"`
+	Data       map[string]interface{} `bson:"data"`
+}
 
-// // "context"
-// // "fmt"
-// // "log"
-// // "time"
+// implement the handler Node interface
+func (n *Node) Export() map[string]interface{} {
+	return map[string]interface{}{
+		"_id":        n.ID,
+		"collection": n.Collection,
+		"name":       n.Name,
+		"data":       n.Data,
+	}
+}
 
-// // driver "github.com/arangodb/go-driver"
-// // "github.com/arangodb/go-driver/http"
 
-// type ArangoGraph struct {
-// 	username string
-// 	password string
-// 	server   string
-// 	port     int
-// 	dbname   string
+type Edge struct {
+	ID           string                 `bson:"_id,omitempty"`
+	Relationship string                 `bson:"relationship"`
+	Collection   string                 `bson:"collection"`
+	From         string                 `bson:"from"`
+	To           string                 `bson:"to"`
+	Data         map[string]interface{} `bson:"data"`
+}
 
-// 	Client   driver.Client
-// 	Name     string
-// }
 
-// func NewArangoGraph() (*ArangoGraph, error) {
-// 	db := &ArangoGraph{}
-// 	return db, nil
-// }
+// implement the handler Edge interface
+func (e *Edge) Export() map[string]interface{} {
+	return map[string]interface{}{
+		"_id":          e.ID,
+		"relationship": e.Relationship,
+		"collection":   e.Collection,
+		"from":         e.From,
+		"to":           e.To,
+		"data":         e.Data,
+	}
+}
 
-// func (ag *ArangoGraph) Init(yamlPath string) error {
-// 	yamlData, err := os.ReadFile(yamlPath)
+// ArangoGraph is the struct for the ArangoDB
+type ArangoGraph struct {
+	username string
+	password string
+	server   string
+	port     int
+	dbname   string
 
-// 	if err != nil {
-// 		return err
-// 	}
+	Client driver.Client
+	Name   string
 
-// 	// unmarshal the yaml data into a map
-// 	var data map[string]interface{}
-// 	err = yaml.Unmarshal(yamlData, &data)
+	db     driver.Database
+	graph  driver.Graph
 
-// 	if err != nil {
-// 		return err
-// 	}
+	// NodeCollection driver.Collection
+	// EdgeCollection driver.Collection
 
-// 	// get the yaml data
-// 	ag.username = data["username"].(string)
-// 	ag.password = data["password"].(string)
-// 	ag.server = data["server"].(string)
-// 	ag.port = data["port"].(int)
-// 	ag.dbname = data["dbname"].(string)
-// 	ag.Name = data["name"].(string)
+	
+}
 
-// 	return nil
-
-// }
+func NewArangoGraph() (*ArangoGraph, error) {
+	db := &ArangoGraph{}
+	return db, nil
+}
 
 // func (ag *ArangoGraph) Connect() error {
 // 	// # Connect to ArangoDB
@@ -89,9 +95,6 @@ package arango
 // func (ag *ArangoGraph) Disconnect() error {
 // 	return nil
 // }
-
-
-
 
 // // type Node struct {
 // // 	ID         string                 `json:"ID"`         // 节点的唯一标识符
@@ -189,10 +192,7 @@ package arango
 
 // 	return nil
 
-
 // }
-
-
 
 // // # AddGraph
 // func (ag *ArangoGraph) AddGraph() error {
@@ -212,8 +212,8 @@ package arango
 // 			op := &driver.CreateGraphOptions{
 // 				EdgeDefinitions: []driver.EdgeDefinition{
 // 					{
-// 						Collection: "my_edge_collection", 
-// 						From:       []string{"mycol"}, 
+// 						Collection: "my_edge_collection",
+// 						From:       []string{"mycol"},
 // 						To:         []string{"mycol"}},
 // 				},
 // 			}
@@ -288,13 +288,8 @@ package arango
 
 // // & AddFunc Section
 
-
-
-
-
 // // func Init(yamlPath string) error {
 // // 	// # Connect to ArangoDB
-
 
 // // 	// # Open a database
 // // 	ctx := context.Background()

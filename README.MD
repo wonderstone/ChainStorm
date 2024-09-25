@@ -13,7 +13,7 @@ Node has unique name
 
 ### Edge/EdgeJSON
 1. Mandatory Part: ID(can be app generated),Collection,From,To,Relationship   
-2. Optional Part: Weight,Data
+2. Optional Part: Data
 
 
 
