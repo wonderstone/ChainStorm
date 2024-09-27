@@ -3,4 +3,9 @@ password: mypassword
 server: http://localhost
 port: 8529
 dbname: mydb
-name: wonderstone
+graphname: wonderstone
+
+logging:
+  level: INFO
+  enabled: true
+  output: "stdout,./tmp/test.log"
