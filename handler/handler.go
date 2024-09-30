@@ -14,7 +14,9 @@ type GraphDB interface {
 	// - Init operations
 	Init(yamlPath string) error
 	// - Connection operations
+	// Connect to the database and update the information in the struct
 	Connect() error
+	// Disconnect from the database, some maynot need this
 	Disconnect() error
 
 	// - CRUD operations
