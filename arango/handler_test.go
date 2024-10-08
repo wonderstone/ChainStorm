@@ -19,7 +19,7 @@ func TestArangoGraph_Init(t *testing.T) {
 	}
 }
 
-func TestArangoGraph_Connect(t *testing.T) {
+func TestArangoGraph_CRUD(t *testing.T) {
 	ag := ArangoGraph{}
 	yamlPath := "config/config.yaml"
 	err := ag.Init(yamlPath)
@@ -39,7 +39,7 @@ func TestArangoGraph_Connect(t *testing.T) {
 	// add a node
 	node := Node{
 		Collection: "persons",
-		Name:       "test",
+		Name:       "test1",
 		Data:       map[string]interface{}{"a": "b"},
 	}
 
@@ -48,6 +48,12 @@ func TestArangoGraph_Connect(t *testing.T) {
 		Name:       "test2",
 		Data:       map[string]interface{}{"b": "c"},
 	}
+	node3 := Node{
+		Collection: "movies",
+		Name:       "test3",
+		Data:       map[string]interface{}{"c": "d"},
+	}
+
 
 	meta, err := ag.AddNode(&node)
 	if err != nil {
@@ -59,6 +65,10 @@ func TestArangoGraph_Connect(t *testing.T) {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
+	meta3, err:= ag.AddNode(&node3)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 	// add an edge
 	edge := Edge{
 		Collection: "knows",
@@ -75,17 +85,44 @@ func TestArangoGraph_Connect(t *testing.T) {
 		Data:       map[string]interface{}{"aa": "bb"},
 	}
 
+	edge3 := Edge{
+		Collection: "likes",
+		From:       meta2.(driver.DocumentMeta).ID.String(),
+		To:         meta.(driver.DocumentMeta).ID.String(),
+		Data:       map[string]interface{}{"aac": "bbc"},
+	}
+
+	edge4 := Edge{
+		Collection: "likes",
+		From:       meta2.(driver.DocumentMeta).ID.String(),
+		To:         meta3.(driver.DocumentMeta).ID.String(),
+		Data:       map[string]interface{}{"aac": "bbc"},
+	}
+
+
+
 	_, err = ag.AddEdge(&edge)
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
 	_, err = ag.AddEdge(&edge2)
+	if err == nil {
+		t.Errorf("Test failed, expected Non-nil, got %v", err)
+	}
+
+	_, err = ag.AddEdge(&edge3)
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
 
+	_, err = ag.AddEdge(&edge4)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+	
 	err = ag.createGraph()
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)

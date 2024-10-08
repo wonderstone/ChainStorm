@@ -9,6 +9,7 @@ import (
 
 	"github.com/arangodb/go-driver"
 	"github.com/arangodb/go-driver/http"
+	"github.com/emirpasic/gods/maps/hashbidimap"
 	"github.com/wonderstone/chainstorm/handler"
 	"github.com/wonderstone/chainstorm/tools"
 	"gopkg.in/yaml.v3"
@@ -40,6 +41,9 @@ func (ag *ArangoGraph) Init(yamlPath string) error {
 	ag.dbname = data["dbname"].(string)
 	// graph part
 	ag.graphname = data["graphname"].(string)
+	// bidiMap
+	ag.nodeNameToIDMap = hashbidimap.New()
+
 
 	// logger
 	loggerConfig := data["logger"].(map[string]interface{})
@@ -56,12 +60,13 @@ func (ag *ArangoGraph) Init(yamlPath string) error {
 // Connect() error
 // + client and db fields are created
 func (ag *ArangoGraph) Connect() error {
+	ctx := context.Background()
 	// connect to the arango database
 	conn, err := http.NewConnection(http.ConnectionConfig{
 		Endpoints: []string{ag.server + ":" + strconv.Itoa((ag.port))},
 	})
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to create connection: %v", err)
+		ag.logger.Info().Msgf("Failed to create connection: %v", err)
 	}
 
 	ag.Client, err = driver.NewClient(driver.ClientConfig{
@@ -69,14 +74,132 @@ func (ag *ArangoGraph) Connect() error {
 		Authentication: driver.BasicAuthentication(ag.username, ag.password),
 	})
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to create client: %v", err)
+		ag.logger.Info().Msgf("Failed to create client: %v", err)
 	}
 
 	// get the database
-	ag.db, err = ag.Client.Database(context.TODO(), ag.dbname)
+	ag.db, err = ag.Client.Database(ctx, ag.dbname)
 
 	if err != nil {
 		return err
+	}
+
+	// list all the node collections
+	collections, err := ag.db.Collections(ctx)
+	if err != nil {
+		ag.logger.Info().Msgf("Failed to list collections: %v", err)
+		return err
+	}
+
+	// iterate over the collections and add the node names to the bidimap
+	for _, col := range collections {
+
+        props, err := col.Properties(ctx)
+		if err != nil {
+            ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+            return err
+        }
+
+		// Skip system collections
+        if props.IsSystem {
+            continue
+        }
+
+        // Skip edge collections
+        if props.Type == driver.CollectionTypeEdge {
+            continue
+        }
+
+		// Create a unique index on the "name" field
+        _, _, err = col.EnsurePersistentIndex(ctx, []string{"name"}, &driver.EnsurePersistentIndexOptions{
+            Unique: true,
+        })
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to create index: %v", err)
+			return err
+		}
+
+
+		query := fmt.Sprintf("FOR doc IN %s RETURN doc", col.Name())
+		cursor, err := ag.db.Query(ctx, query, nil)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to execute query: %v",
+				err)
+			return err
+		}
+		defer cursor.Close()
+
+		for {
+			var doc Node
+			_, err := cursor.ReadDocument(ctx, &doc)
+			if driver.IsNoMoreDocuments(err) {
+				break
+			} else if err != nil {
+				ag.logger.Info().Msgf("Failed to read document: %v",
+					err)
+				return err
+			}
+			// check if the doc.Name is already in the bidimap
+			// if it is, then error
+			if _, ok := ag.nodeNameToIDMap.Get(doc.Name); ok {
+				ag.logger.Info().Msgf("Node %s already exists", doc.Name)
+				return fmt.Errorf("node already exists")
+			}
+			// add the node name to the bidimap
+			ag.nodeNameToIDMap.Put(doc.Name, doc.ID)
+		}
+
+	}
+
+	// iter all the edge collections and check if the edge from and to exist
+	for _, col := range collections {
+
+		props, err := col.Properties(ctx)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+			return err
+		}
+
+		// Skip system collections
+		if props.IsSystem {
+			continue
+		}
+		
+		// Skip node collections
+		if props.Type == driver.CollectionTypeDocument {
+			continue
+		}
+
+		query := fmt.Sprintf("FOR doc IN %s RETURN doc", col.Name())
+		cursor, err := ag.db.Query(ctx, query, nil)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to execute query: %v",
+				err)
+			return err
+		}
+		defer cursor.Close()
+
+		for {
+			var doc Edge
+			_, err := cursor.ReadDocument(ctx, &doc)
+			if driver.IsNoMoreDocuments(err) {
+				break
+			} else if err != nil {
+				ag.logger.Info().Msgf("Failed to read document: %v",
+					err)
+				return err
+			}
+			// check if the doc.From and doc.To are already in the bidimap
+			// if it is, then error
+			if _, ok := ag.nodeNameToIDMap.Get(doc.From); !ok {
+				ag.logger.Info().Msgf("Node %s does not exist", doc.From)
+				return fmt.Errorf("node does not exist")
+			}
+			if _, ok := ag.nodeNameToIDMap.Get(doc.To); !ok {
+				ag.logger.Info().Msgf("Node %s does not exist", doc.To)
+				return fmt.Errorf("node does not exist")
+			}
+		}
 	}
 
 	// output the log that the connection is successful
@@ -100,20 +223,61 @@ func (ag *ArangoGraph) Disconnect() error {
 
 // todo: createGraph
 func (ag *ArangoGraph) createGraph() error {
+	// get all the collections
+
+	ctx := context.Background()
+	collections, err := ag.db.Collections(ctx)
+	if err != nil {
+		ag.logger.Info().Msgf("Failed to list collections: %v", err)
+		return err
+	}
+
+	// iter all the collections and output the non-system collections to nodeCollections and edgeCollections
+	var nodeCollections []string
+	var edgeCollections []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+			return err
+		}
+
+		// Skip system collections
+		if props.IsSystem {
+			continue
+		}
+
+		// Skip edge collections
+		if props.Type == driver.CollectionTypeEdge {
+			edgeCollections = append(edgeCollections, col.Name())
+			continue
+		}
+
+		nodeCollections = append(nodeCollections, col.Name())
+	}
+
+	// create the []driver.EdgeDefinition slice
+	var edgeDefinitions []driver.EdgeDefinition
+	for _, col := range edgeCollections {
+		edgeDefinitions = append(edgeDefinitions, driver.EdgeDefinition{
+			Collection: col,
+			From:       nodeCollections,
+			To:         nodeCollections,
+		})
+	}
+
+
+
+
 
 	options := driver.CreateGraphOptions{
-		EdgeDefinitions: []driver.EdgeDefinition{
-			{
-				Collection: "knows",
-				From:       []string{"persons"},
-				To:         []string{"persons"},
-			},
-		},
+		EdgeDefinitions: edgeDefinitions,
 	}
 
 	// create the graph
-	var err error
 	ag.graph, err = ag.db.CreateGraphV2(context.TODO(), ag.graphname, &options)
+	// ag.graph, err = ag.db.CreateGraphV2(context.TODO(), ag.graphname, nil)
+
 
 	if err != nil {
 		return err
@@ -131,17 +295,17 @@ func (ag *ArangoGraph) checkItemExists(id string) (bool, error) {
 	// split the id into collection and name
 	infos := strings.Split(id, "/")
 	if len(infos) != 2 {
-		ag.logger.Fatal().Msgf("Invalid id: %s", id)
+		ag.logger.Info().Msgf("Invalid id: %s", id)
 		return false, fmt.Errorf("invalid id")
 	}
 
 	// check if the collection exists
 	if exists, err := ag.db.CollectionExists(ctx, infos[0]); err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for collection: %v", err)
+		ag.logger.Info().Msgf("Failed to check for collection: %v", err)
 		return false, err
 	} else {
 		if !exists {
-			ag.logger.Fatal().Msgf("Collection %s does not exist", infos[0])
+			ag.logger.Info().Msgf("Collection %s does not exist", infos[0])
 			return false, fmt.Errorf("collection does not exist")
 		}
 	}
@@ -149,16 +313,16 @@ func (ag *ArangoGraph) checkItemExists(id string) (bool, error) {
 	// check if the document exists
 	col, err := ag.db.Collection(ctx, infos[0])
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
+		ag.logger.Info().Msgf("Failed to open collection: %v", err)
 		return false, err
 	}
 
-	if exists, err := col.DocumentExists(ctx, id); err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for document: %v", err)
+	if exists, err := col.DocumentExists(ctx, infos[1]); err != nil {
+		ag.logger.Info().Msgf("Failed to check for document: %v", err)
 		return false, err
 	} else {
 		if exists {
-			ag.logger.Fatal().Msgf("Document %s already exists", id)
+			ag.logger.Info().Msgf("Document %s exists", id)
 			return true, nil
 		}
 	}
@@ -181,19 +345,19 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 	// # Open a database
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
+		ag.logger.Info().Msgf("Failed to open database: %v", err)
 		return nil, err
 	}
 	// # check if the collection exists
 	if exists, err := db.CollectionExists(ctx, n.Collection); err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for collection: %v", err)
+		ag.logger.Info().Msgf("Failed to check for collection: %v", err)
 		return nil, err
 	} else {
 		if !exists {
 			// create a collection
 			col, err := db.CreateCollection(ctx, n.Collection, nil)
 			if err != nil {
-				ag.logger.Fatal().Msgf("Failed to create collection: %v", err)
+				ag.logger.Info().Msgf("Failed to create collection: %v", err)
 				return nil, err
 			}
 			ag.logger.Info().Msgf("Collection %s created", col.Name())
@@ -203,18 +367,18 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 	// # Open a collection
 	col, err := db.Collection(ctx, n.Collection)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
+		ag.logger.Info().Msgf("Failed to open collection: %v", err)
 		return nil, err
 	}
 
 	// # check if some document with the same name exists
 	// # if it exists, return an error
 	if exists, err := col.DocumentExists(ctx, n.Name); err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for document: %v", err)
+		ag.logger.Info().Msgf("Failed to check for document: %v", err)
 		return nil, err
 	} else {
 		if exists {
-			ag.logger.Fatal().Msgf("Document %s already exists", n.Name)
+			ag.logger.Info().Msgf("Document %s already exists", n.Name)
 			return nil, fmt.Errorf("document already exists")
 		}
 	}
@@ -227,7 +391,7 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 
 	meta, err := col.CreateDocument(ctx, doc)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to create document: %v", err)
+		ag.logger.Info().Msgf("Failed to create document: %v", err)
 		return nil, err
 	}
 
@@ -247,22 +411,41 @@ func (ag *ArangoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 	case *Edge:
 		e = *v
 	default:
-		ag.logger.Fatal().Msgf("Invalid input")
+		ag.logger.Info().Msgf("Invalid input")
 		return nil, fmt.Errorf("invalid input")
 	}
 
 	ctx := context.Background()
 
+	// check if the collection exists
+	if exists, err := ag.db.CollectionExists(ctx, e.Collection); err != nil {
+		ag.logger.Info().Msgf("Failed to check for collection: %v", err)
+		return nil, err
+	} else {
+		if !exists {
+			// create an edge collection 
+			col , err := ag.db.CreateCollection(ctx, e.Collection, &driver.CreateCollectionOptions{
+				Type: driver.CollectionTypeEdge,
+			})
+			if err != nil {
+				ag.logger.Info().Msgf("Failed to create collection: %v", err)
+				return nil, err
+			}
+			ag.logger.Info().Msgf("Collection %s created", col.Name())
+
+		}
+	}
+	
 	// open the edge collection
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
+		ag.logger.Info().Msgf("Failed to open database: %v", err)
 		return nil, err
 	}
 
 	edgeCol, err := db.Collection(ctx, e.Collection)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open edge collection: %v", err)
+		ag.logger.Info().Msgf("Failed to open edge collection: %v", err)
 		return nil, err
 	}
 
@@ -271,25 +454,26 @@ func (ag *ArangoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 	// check if the from and to nodes exist using checkNodeExists
 	exists, err := ag.checkItemExists(e.From)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for node: %v", err)
+		ag.logger.Info().Msgf("Failed to check for node: %v", err)
 		return nil, err
 	}
-	if exists {
-		ag.logger.Fatal().Msgf("from node %s already exists", e.From)
-		return nil, fmt.Errorf("from node already exists")
+	if !exists {
+		ag.logger.Info().Msgf("from node %s not exists", e.From)
+		return nil, fmt.Errorf("from node not exists")
 	}
 
 	exists, err = ag.checkItemExists(e.To)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for node: %v", err)
+		ag.logger.Info().Msgf("Failed to check for node: %v", err)
 		return nil, err
 	}
 
-	if exists {
-		ag.logger.Fatal().Msgf("to node %s already exists", e.To)
-		return nil, fmt.Errorf("to node already exists")
+	if !exists {
+		ag.logger.Info().Msgf("to node %s not exists", e.To)
+		return nil, fmt.Errorf("to node not exists")
 	}
 
+	doc["_from"] = e.From
 	doc["_to"] = e.To
 	doc["collection"] = e.Collection
 	doc["relationship"] = e.Relationship
@@ -695,6 +879,8 @@ func (ag *ArangoGraph) DeleteNode(name interface{}) error {
 }
 // DeleteItemByID(id interface{}) error
 func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
+	ctx := context.Background()
+
 	// convert id to string
 	idStr, ok := id.(string)
 	if !ok {
@@ -710,14 +896,14 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 	}
 
 	// get the collection
-	col, err := ag.db.Collection(context.Background(), infos[0])
+	col, err := ag.db.Collection(ctx, infos[0])
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return err
 	}
 
 	// delete the document by _id
-	_, err = col.RemoveDocument(context.Background(), infos[1])
+	_, err = col.RemoveDocument(ctx, infos[1])
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to delete document: %v", err)
 		return err
@@ -743,7 +929,7 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 // + Query operations
 // GetItemByID(id interface{}) (interface{}, error)
 func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
-
+	ctx := context.Background()
 	// convert id to string
 	idStr, ok := id.(string)
 	if !ok {
@@ -759,7 +945,7 @@ func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 	}
 
 	// get the collection
-	col, err := ag.db.Collection(context.Background(), infos[0])
+	col, err := ag.db.Collection(ctx, infos[0])
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return nil, err
@@ -767,7 +953,7 @@ func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 
 	// get the document by _id
 	var doc Node
-	_, err = col.ReadDocument(context.Background(), infos[1], &doc)
+	_, err = col.ReadDocument(ctx, infos[1], &doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to get document: %v", err)
 		return nil, err
