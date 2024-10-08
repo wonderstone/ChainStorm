@@ -54,7 +54,7 @@ func (ag *ArangoGraph) Init(yamlPath string) error {
 
 // - Connection operations
 // Connect() error
-
+// + client and db fields are created
 func (ag *ArangoGraph) Connect() error {
 	// connect to the arango database
 	conn, err := http.NewConnection(http.ConnectionConfig{
@@ -79,12 +79,8 @@ func (ag *ArangoGraph) Connect() error {
 		return err
 	}
 
-	// get the graph
-	// ag.graph, err = ag.db.Graph(context.TODO(), ag.Name)
-
-	// if err != nil {
-	// 	return err
-	// }
+	// output the log that the connection is successful
+	ag.logger.Info().Msgf("Connected to ArangoDB")
 
 	return nil
 }

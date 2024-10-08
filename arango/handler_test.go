@@ -13,6 +13,10 @@ func TestArangoGraph_Init(t *testing.T) {
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
+	err = ag.Connect()
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 }
 
 func TestArangoGraph_Connect(t *testing.T) {
