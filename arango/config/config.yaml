@@ -5,7 +5,7 @@ port: 8529
 dbname: mydb
 graphname: wonderstone
 
-logging:
+logger:
   level: INFO
   enabled: true
   output: "stdout,./tmp/test.log"

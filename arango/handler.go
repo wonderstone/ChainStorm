@@ -46,6 +46,9 @@ func (ag *ArangoGraph) Init(yamlPath string) error {
 	logger := tools.NewLogger(loggerConfig)
 	ag.logger = &logger
 
+	// log out: say init success
+	ag.logger.Info().Msgf("ArangoGraph initialized")
+
 	return nil
 }
 
