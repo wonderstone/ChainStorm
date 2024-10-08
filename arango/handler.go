@@ -44,7 +44,6 @@ func (ag *ArangoGraph) Init(yamlPath string) error {
 	// bidiMap
 	ag.nodeNameToIDMap = hashbidimap.New()
 
-
 	// logger
 	loggerConfig := data["logger"].(map[string]interface{})
 	logger := tools.NewLogger(loggerConfig)
@@ -94,31 +93,30 @@ func (ag *ArangoGraph) Connect() error {
 	// iterate over the collections and add the node names to the bidimap
 	for _, col := range collections {
 
-        props, err := col.Properties(ctx)
+		props, err := col.Properties(ctx)
 		if err != nil {
-            ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
-            return err
-        }
+			ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+			return err
+		}
 
 		// Skip system collections
-        if props.IsSystem {
-            continue
-        }
+		if props.IsSystem {
+			continue
+		}
 
-        // Skip edge collections
-        if props.Type == driver.CollectionTypeEdge {
-            continue
-        }
+		// Skip edge collections
+		if props.Type == driver.CollectionTypeEdge {
+			continue
+		}
 
 		// Create a unique index on the "name" field
-        _, _, err = col.EnsurePersistentIndex(ctx, []string{"name"}, &driver.EnsurePersistentIndexOptions{
-            Unique: true,
-        })
+		_, _, err = col.EnsurePersistentIndex(ctx, []string{"name"}, &driver.EnsurePersistentIndexOptions{
+			Unique: true,
+		})
 		if err != nil {
 			ag.logger.Info().Msgf("Failed to create index: %v", err)
 			return err
 		}
-
 
 		query := fmt.Sprintf("FOR doc IN %s RETURN doc", col.Name())
 		cursor, err := ag.db.Query(ctx, query, nil)
@@ -164,7 +162,7 @@ func (ag *ArangoGraph) Connect() error {
 		if props.IsSystem {
 			continue
 		}
-		
+
 		// Skip node collections
 		if props.Type == driver.CollectionTypeDocument {
 			continue
@@ -266,10 +264,6 @@ func (ag *ArangoGraph) createGraph() error {
 		})
 	}
 
-
-
-
-
 	options := driver.CreateGraphOptions{
 		EdgeDefinitions: edgeDefinitions,
 	}
@@ -277,7 +271,6 @@ func (ag *ArangoGraph) createGraph() error {
 	// create the graph
 	ag.graph, err = ag.db.CreateGraphV2(context.TODO(), ag.graphname, &options)
 	// ag.graph, err = ag.db.CreateGraphV2(context.TODO(), ag.graphname, nil)
-
 
 	if err != nil {
 		return err
@@ -306,7 +299,7 @@ func (ag *ArangoGraph) checkItemExists(id string) (bool, error) {
 	} else {
 		if !exists {
 			ag.logger.Info().Msgf("Collection %s does not exist", infos[0])
-			return false, fmt.Errorf("collection does not exist")
+			return false, fmt.Errorf("collection %s does not exist", infos[0])
 		}
 	}
 
@@ -385,7 +378,7 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 
 	// # create a document
 	doc := n.Data
-	doc["_id"] = n.ID
+	// doc["_id"] = n.ID
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
 
@@ -395,11 +388,12 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 		return nil, err
 	}
 
+
 	// # add the node info to the bidirectional map nodeNameToIDMap
 	// # bidiMap itself do not check if the key already exists
 	// # it is the arangodb's former operations that check if the document already exists
 	// # bidiMap actually will replace the old value with the new value
-	ag.nodeNameToIDMap.Put(n.Name, n.ID)
+	ag.nodeNameToIDMap.Put(n.Name, meta.ID)
 	return meta, nil
 }
 
@@ -423,8 +417,8 @@ func (ag *ArangoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 		return nil, err
 	} else {
 		if !exists {
-			// create an edge collection 
-			col , err := ag.db.CreateCollection(ctx, e.Collection, &driver.CreateCollectionOptions{
+			// create an edge collection
+			col, err := ag.db.CreateCollection(ctx, e.Collection, &driver.CreateCollectionOptions{
 				Type: driver.CollectionTypeEdge,
 			})
 			if err != nil {
@@ -435,7 +429,7 @@ func (ag *ArangoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 
 		}
 	}
-	
+
 	// open the edge collection
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
@@ -499,6 +493,23 @@ func (ag *ArangoGraph) ReplaceNode(ni handler.Node) error {
 		return fmt.Errorf("invalid input")
 	}
 
+	// check if the id is blank, if yes, get the id from the bidimap
+	if n.ID == "" {
+		id, ok := ag.nodeNameToIDMap.Get(n.Name)
+		if !ok {
+			ag.logger.Fatal().Msgf("Node %s does not exist", n.Name)
+			return fmt.Errorf("node does not exist")
+		}
+		n.ID = id.(driver.DocumentID).String()
+	}
+	
+	// get the collection and key from the id
+	infos := strings.Split(n.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", n.ID)
+		return fmt.Errorf("invalid id")
+	}
+
 	// check if the node exists
 	exists, err := ag.checkItemExists(n.ID)
 	if err != nil {
@@ -529,14 +540,14 @@ func (ag *ArangoGraph) ReplaceNode(ni handler.Node) error {
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
 
-	_, err = col.ReplaceDocument(ctx, n.ID, doc)
+	_, err = col.ReplaceDocument(ctx, infos[1], doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to replace document: %v", err)
 		return err
 	}
 
-	// update the node info in the bidirectional map nodeNameToIDMap
-	ag.nodeNameToIDMap.Put(n.Name, n.ID)
+	// // update the node info in the bidirectional map nodeNameToIDMap
+	// ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
 }
 
@@ -595,11 +606,6 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 	return nil
 }
 
-
-
-
-
-
 // UpdateNode(n Node) error
 func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	// convert ni to Node
@@ -652,8 +658,6 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
 }
-
-
 
 // UpdateEdge(e Edge) error
 func (ag *ArangoGraph) UpdateEdge(ei handler.Edge) error {
@@ -710,11 +714,6 @@ func (ag *ArangoGraph) UpdateEdge(ei handler.Edge) error {
 	return nil
 }
 
-
-
-
-
-
 // MergeNode(n Node) error
 func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 	// convert ni to Node
@@ -766,7 +765,7 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 
 	// update the node
 	doc := oldNode.Data
-	
+
 	doc["_id"] = n.ID
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
@@ -781,7 +780,6 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 	ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
 }
-
 
 // MergeEdge(e Edge) error
 func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
@@ -852,7 +850,6 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 	return nil
 }
 
-
 // + Delete operations
 // DeleteNode(name interface{}) error
 func (ag *ArangoGraph) DeleteNode(name interface{}) error {
@@ -875,8 +872,8 @@ func (ag *ArangoGraph) DeleteNode(name interface{}) error {
 
 	return nil
 
-
 }
+
 // DeleteItemByID(id interface{}) error
 func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 	ctx := context.Background()
@@ -910,7 +907,7 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 	}
 
 	// remove the node from the bidimap
-	// bidimap name is the name, value is the id 
+	// bidimap name is the name, value is the id
 	// so we need to to get the name first
 	// then remove the name which is the name
 	// then remove the value which is the id
@@ -923,8 +920,6 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 
 	return nil
 }
-
-
 
 // + Query operations
 // GetItemByID(id interface{}) (interface{}, error)
@@ -1143,6 +1138,7 @@ func (ag *ArangoGraph) GetFromNodes(name interface{}) ([]handler.Node, error) {
 
 	return nodes, nil
 }
+
 // GetToNodes(name interface{}) ([]Node, error)
 func (ag *ArangoGraph) GetToNodes(name interface{}) ([]handler.Node, error) {
 	// convert the name into string
@@ -1211,6 +1207,7 @@ func (ag *ArangoGraph) GetToNodes(name interface{}) ([]handler.Node, error) {
 
 	return nodes, nil
 }
+
 // GetInEdges(name interface{}) ([]Edge, error)
 func (ag *ArangoGraph) GetInEdges(name interface{}) ([]handler.Edge, error) {
 	// convert the name into string
@@ -1266,6 +1263,7 @@ func (ag *ArangoGraph) GetInEdges(name interface{}) ([]handler.Edge, error) {
 
 	return edges, nil
 }
+
 // GetOutEdges(name interface{}) ([]Edge, error)
 func (ag *ArangoGraph) GetOutEdges(name interface{}) ([]handler.Edge, error) {
 	// convert the name into string
@@ -1386,12 +1384,13 @@ func (ag *ArangoGraph) GetAllRelatedNodes(name interface{}) ([][]handler.Node, e
 		if !ok {
 			ag.logger.Fatal().Msgf("Invalid node: %v", node)
 			return nil, fmt.Errorf("invalid node")
-	}
-	nodes = append(nodes, []handler.Node{n})
+		}
+		nodes = append(nodes, []handler.Node{n})
 	}
 
 	return nodes, nil
 }
+
 // GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
 func (ag *ArangoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...handler.Edge) ([][]handler.Node, error) {
 	// convert the name into string
@@ -1419,7 +1418,7 @@ func (ag *ArangoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice
 	// get the nodes
 	var nodes [][]handler.Node
 	for _, edge := range EdgeSlice {
-		
+
 		// convert the handler.Edge to Edge
 		var e Edge
 		switch v := edge.(type) {
@@ -1430,7 +1429,6 @@ func (ag *ArangoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice
 			return nil, fmt.Errorf("invalid input")
 		}
 
-		
 		// get the node
 
 		node, err := ag.GetItemByID(e.To)
@@ -1481,7 +1479,7 @@ func (ag *ArangoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][
 	RETURN edge
 	`
 	bindVars := map[string]interface{}{
-		"id": id,
+		"id":  id,
 		"max": max,
 	}
 
@@ -1519,4 +1517,4 @@ func (ag *ArangoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][
 	}
 
 	return nodes, nil
-} 
+}

@@ -1,6 +1,7 @@
 package arango
 
 import (
+	"context"
 	"testing"
 
 	"github.com/arangodb/go-driver"
@@ -20,6 +21,9 @@ func TestArangoGraph_Init(t *testing.T) {
 }
 
 func TestArangoGraph_CRUD(t *testing.T) {
+
+	ctx := context.Background()
+
 	ag := ArangoGraph{}
 	yamlPath := "config/config.yaml"
 	err := ag.Init(yamlPath)
@@ -122,10 +126,31 @@ func TestArangoGraph_CRUD(t *testing.T) {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
-	
+
 	err = ag.createGraph()
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
+
+
+
+	// test replaceNode
+	node.Data = map[string]interface{}{"a": "c"}
+	err = ag.ReplaceNode(&node)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+	// delete the graph and all its nodes and edges
+	options := driver.RemoveGraphOptions{
+		DropCollections: true,
+	}
+
+	err = ag.graph.RemoveWithOpts(ctx,&options)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+
 
 }
