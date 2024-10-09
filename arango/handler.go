@@ -2,6 +2,7 @@ package arango
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -189,11 +190,11 @@ func (ag *ArangoGraph) Connect() error {
 			}
 			// check if the doc.From and doc.To are already in the bidimap
 			// if it is, then error
-			if _, ok := ag.nodeNameToIDMap.Get(doc.From); !ok {
+			if _, ok := ag.nodeNameToIDMap.GetKey(doc.From); !ok {
 				ag.logger.Info().Msgf("Node %s does not exist", doc.From)
 				return fmt.Errorf("node does not exist")
 			}
-			if _, ok := ag.nodeNameToIDMap.Get(doc.To); !ok {
+			if _, ok := ag.nodeNameToIDMap.GetKey(doc.To); !ok {
 				ag.logger.Info().Msgf("Node %s does not exist", doc.To)
 				return fmt.Errorf("node does not exist")
 			}
@@ -377,8 +378,8 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 	}
 
 	// # create a document
-	doc := n.Data
-	// doc["_id"] = n.ID
+	doc := make(map[string]interface{})
+	doc["data"] = n.Data
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
 
@@ -387,7 +388,6 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 		ag.logger.Info().Msgf("Failed to create document: %v", err)
 		return nil, err
 	}
-
 
 	// # add the node info to the bidirectional map nodeNameToIDMap
 	// # bidiMap itself do not check if the key already exists
@@ -442,8 +442,8 @@ func (ag *ArangoGraph) AddEdge(ei handler.Edge) (interface{}, error) {
 		ag.logger.Info().Msgf("Failed to open edge collection: %v", err)
 		return nil, err
 	}
-
-	doc := e.Data
+	doc := make(map[string]interface{})
+	doc["data"] = e.Data
 	doc["_id"] = e.ID
 	// check if the from and to nodes exist using checkNodeExists
 	exists, err := ag.checkItemExists(e.From)
@@ -502,7 +502,7 @@ func (ag *ArangoGraph) ReplaceNode(ni handler.Node) error {
 		}
 		n.ID = id.(driver.DocumentID).String()
 	}
-	
+
 	// get the collection and key from the id
 	infos := strings.Split(n.ID, "/")
 	if len(infos) != 2 {
@@ -535,7 +535,8 @@ func (ag *ArangoGraph) ReplaceNode(ni handler.Node) error {
 		return err
 	}
 
-	doc := n.Data
+	doc := make(map[string]interface{})
+	doc["data"] = n.Data
 	doc["_id"] = n.ID
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
@@ -575,6 +576,13 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 		return fmt.Errorf("edge does not exist")
 	}
 
+	// get the collection and key from the id
+	infos := strings.Split(e.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", e.ID)
+		return fmt.Errorf("invalid id")
+	}
+
 	// update the edge
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
@@ -589,14 +597,15 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 		return err
 	}
 
-	doc := e.Data
+	doc := make(map[string]interface{})
+	doc["data"] = e.Data
 	doc["_id"] = e.ID
 	doc["collection"] = e.Collection
 	doc["relationship"] = e.Relationship
 	doc["_from"] = e.From
 	doc["_to"] = e.To
 
-	_, err = col.ReplaceDocument(ctx, e.ID, doc)
+	_, err = col.ReplaceDocument(ctx, infos[1], doc)
 
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to replace document: %v", err)
@@ -607,6 +616,8 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 }
 
 // UpdateNode(n Node) error
+// Update: only update the fields that are not blank
+
 func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	// convert ni to Node
 	var n Node
@@ -615,6 +626,16 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 		n = *v
 	default:
 		return fmt.Errorf("invalid input")
+	}
+
+	// check if the id is blank, if yes, get the id from the bidimap
+	if n.ID == "" {
+		id, ok := ag.nodeNameToIDMap.Get(n.Name)
+		if !ok {
+			ag.logger.Fatal().Msgf("Node %s does not exist", n.Name)
+			return fmt.Errorf("node does not exist")
+		}
+		n.ID = id.(driver.DocumentID).String()
 	}
 
 	// check if the node exists
@@ -626,6 +647,13 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	if !exists {
 		ag.logger.Fatal().Msgf("Node %s does not exist", n.ID)
 		return fmt.Errorf("node does not exist")
+	}
+
+	// get the collection and key from the id
+	infos := strings.Split(n.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", n.ID)
+		return fmt.Errorf("invalid id")
 	}
 
 	// update the node
@@ -640,22 +668,38 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return err
-
 	}
 
-	doc := n.Data
+	// get the old data
+	var oldNode Node
+	_, err = col.ReadDocument(ctx, infos[1], &oldNode)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to read document: %v", err)
+		return err
+	}
+
+	// update the data
+	for k, v := range n.Data {
+		if v != "" {
+			oldNode.Data[k] = v
+		}
+	}
+
+	// update the node
+	doc := make(map[string]interface{})
+	doc["data"] = oldNode.Data
 	doc["_id"] = n.ID
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
 
-	_, err = col.UpdateDocument(ctx, n.ID, doc)
+	_, err = col.UpdateDocument(ctx, infos[1], doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to update document: %v", err)
 		return err
 	}
 
-	// update the node info in the bidirectional map nodeNameToIDMap
-	ag.nodeNameToIDMap.Put(n.Name, n.ID)
+	// // update the node info in the bidirectional map nodeNameToIDMap
+	// ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
 }
 
@@ -683,6 +727,13 @@ func (ag *ArangoGraph) UpdateEdge(ei handler.Edge) error {
 		return fmt.Errorf("edge does not exist")
 	}
 
+	// get the collection and key from the id
+	infos := strings.Split(e.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", e.ID)
+		return fmt.Errorf("invalid id")
+	}
+
 	// update the edge
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
@@ -697,15 +748,31 @@ func (ag *ArangoGraph) UpdateEdge(ei handler.Edge) error {
 		return err
 	}
 
-	doc := e.Data
+	// get the old data
+	var oldEdge Edge
+	_, err = col.ReadDocument(ctx, infos[1], &oldEdge)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to read document: %v", err)
+		return err
+	}
+
+	// update the data
+	for k, v := range e.Data {
+		if v != "" {
+			oldEdge.Data[k] = v
+		}
+	}
+
+	// update the edge
+	doc := make(map[string]interface{})
+	doc["data"] = oldEdge.Data
 	doc["_id"] = e.ID
 	doc["collection"] = e.Collection
 	doc["relationship"] = e.Relationship
 	doc["_from"] = e.From
 	doc["_to"] = e.To
 
-	_, err = col.UpdateDocument(ctx, e.ID, doc)
-
+	_, err = col.UpdateDocument(ctx, infos[1], doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to update document: %v", err)
 		return err
@@ -723,6 +790,23 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		n = *v
 	default:
 		return fmt.Errorf("invalid input")
+	}
+
+	// check if the id is blank, if yes, get the id from the bidimap
+	if n.ID == "" {
+		id, ok := ag.nodeNameToIDMap.Get(n.Name)
+		if !ok {
+			ag.logger.Fatal().Msgf("Node %s does not exist", n.Name)
+			return fmt.Errorf("node does not exist")
+		}
+		n.ID = id.(driver.DocumentID).String()
+	}
+
+	// get the collection and key from the id
+	infos := strings.Split(n.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", n.ID)
+		return fmt.Errorf("invalid id")
 	}
 
 	// check if the node exists
@@ -752,33 +836,54 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 
 	// get the old data
 	var oldNode Node
-	_, err = col.ReadDocument(ctx, n.ID, &oldNode)
+	_, err = col.ReadDocument(ctx, infos[1], &oldNode)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to read document: %v", err)
 		return err
 	}
 
 	// merge the data
+	// if the data is new, add it to the oldNode
+	// if the data is not new, add it to the oldNode
 	for k, v := range n.Data {
-		oldNode.Data[k] = v
+		if _, ok := oldNode.Data[k]; !ok {
+			oldNode.Data[k] = v
+		} else {
+			if v != "" {
+				// type assertion
+				switch v.(type) {
+				case string:
+					oldNode.Data[k] = oldNode.Data[k].(string) + v.(string)
+				case int:
+					oldNode.Data[k] = oldNode.Data[k].(int) + v.(int)
+				case float64:
+					oldNode.Data[k] = oldNode.Data[k].(float64) + v.(float64)
+				case bool:
+					oldNode.Data[k] = oldNode.Data[k].(bool) || v.(bool)
+				default:
+					ag.logger.Fatal().Msgf("Invalid data type")
+				}
+			}
+		}
 	}
 
 	// update the node
-	doc := oldNode.Data
-
+	doc := make(map[string]interface{})
+	doc["data"] = oldNode.Data
 	doc["_id"] = n.ID
 	doc["name"] = n.Name
 	doc["collection"] = n.Collection
 
-	_, err = col.UpdateDocument(ctx, n.ID, doc)
+	_, err = col.UpdateDocument(ctx, infos[1], doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to update document: %v", err)
 		return err
 	}
 
-	// update the node info in the bidirectional map nodeNameToIDMap
-	ag.nodeNameToIDMap.Put(n.Name, n.ID)
+	// // update the node info in the bidirectional map nodeNameToIDMap
+	// ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
+
 }
 
 // MergeEdge(e Edge) error
@@ -805,6 +910,13 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 		return fmt.Errorf("edge does not exist")
 	}
 
+	// get the collection and key from the id
+	infos := strings.Split(e.ID, "/")
+	if len(infos) != 2 {
+		ag.logger.Fatal().Msgf("Invalid id: %s", e.ID)
+		return fmt.Errorf("invalid id")
+	}
+
 	// merge the edge
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
@@ -821,27 +933,47 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 
 	// get the old data
 	var oldEdge Edge
-	_, err = col.ReadDocument(ctx, e.ID, &oldEdge)
+	_, err = col.ReadDocument(ctx, infos[1], &oldEdge)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to read document: %v", err)
 		return err
 	}
 
 	// merge the data
+	// if the data is new, add it to the oldEdge
+	// if the data is not new, add it to the oldEdge
 	for k, v := range e.Data {
-		oldEdge.Data[k] = v
-	}
+		if _, ok := oldEdge.Data[k]; !ok {
+			oldEdge.Data[k] = v
+		} else {
+			if v != "" {
+				// type assertion
+				switch v.(type) {
+				case string:
+					oldEdge.Data[k] = oldEdge.Data[k].(string) + v.(string)
+				case int:
+					oldEdge.Data[k] = oldEdge.Data[k].(int) + v.(int)
+				case float64:
+					oldEdge.Data[k] = oldEdge.Data[k].(float64) + v.(float64)
+				case bool:
+					oldEdge.Data[k] = oldEdge.Data[k].(bool) || v.(bool)
+				default:
+					ag.logger.Fatal().Msgf("Invalid data type")
 
-	// update the edge
-	doc := oldEdge.Data
+				}
+			}
+
+		}
+	}
+	doc := make(map[string]interface{})
+	doc["data"] = oldEdge.Data
 	doc["_id"] = e.ID
 	doc["collection"] = e.Collection
 	doc["relationship"] = e.Relationship
 	doc["_from"] = e.From
 	doc["_to"] = e.To
 
-	_, err = col.UpdateDocument(ctx, e.ID, doc)
-
+	_, err = col.UpdateDocument(ctx, infos[1], doc)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to update document: %v", err)
 		return err
@@ -926,11 +1058,7 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 	ctx := context.Background()
 	// convert id to string
-	idStr, ok := id.(string)
-	if !ok {
-		ag.logger.Fatal().Msgf("Invalid id: %v", id)
-		return nil, fmt.Errorf("invalid id")
-	}
+	idStr := id.(driver.DocumentID).String()
 
 	// split the id into collection and name
 	infos := strings.Split(idStr, "/")
@@ -980,30 +1108,25 @@ func (ag *ArangoGraph) GetNode(name interface{}) (handler.Node, error) {
 		return nil, err
 	}
 
-	n, ok := node.(handler.Node)
+	n, ok := node.(Node)
 	if !ok {
 		ag.logger.Fatal().Msgf("Invalid node: %v", node)
 		return nil, fmt.Errorf("invalid node")
 	}
-	return n, nil
+
+	return &n, nil
 }
 
-// GetNodesByRegex(regex string) ([]Node, error)
-func (ag *ArangoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
+
+
+// Query method returns []interface{}, error
+// interface{} is in the map[string]interface{} format
+func (ag *ArangoGraph) Query(query string, bindVars map[string]interface{}) ([]interface{}, error) {
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
 		return nil, err
-	}
-
-	query := `
-	FOR node IN nodes
-    FILTER REGEX_MATCHES(node.name, @regex, true)
-    RETURN node
-	`
-	bindVars := map[string]interface{}{
-		"regex": regex,
 	}
 
 	cursor, err := db.Query(ctx, query, bindVars)
@@ -1013,9 +1136,150 @@ func (ag *ArangoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
 	}
 	defer cursor.Close()
 
-	var nodes []handler.Node
+	var result []interface{}
 	for {
-		var node handler.Node
+		var doc interface{}
+		_, err := cursor.ReadDocument(ctx, &doc)
+		if driver.IsNoMoreDocuments(err) {
+			break
+		} else if err != nil {
+			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
+			return nil, err
+		}
+		result = append(result, doc)
+	}
+
+	return result, nil
+}
+
+// give a flexible query generator
+func QueryGenerator(q interface{}) (string, map[string]interface{}, error) {
+	var subqueries []string
+	// # get collection 
+	cols, ok := q.(map[string]interface{})["collections"].([]string)
+	if !ok {
+		return "", nil, fmt.Errorf("collection not found")
+	}
+
+	// # get regexPatterns
+	bindVars := make(map[string]interface{})
+	regexPatterns, ok := q.(map[string]interface{})["regexPatterns"].([]string)
+	if !ok {
+		return "", nil, fmt.Errorf("regex not found")
+	}
+	for i, regex := range regexPatterns {
+		regexVar := fmt.Sprintf("regex%d", i)
+		bindVars[regexVar] = regex
+	}
+
+	// # get filter
+	filter , ok := q.(map[string]interface{})["filter"].(string)
+	if !ok {
+		return "", nil, fmt.Errorf("filter not found")
+	}
+
+	// # get base query
+	query_base, ok := q.(map[string]interface{})["query"].(string)
+	if !ok {
+		return "", nil, fmt.Errorf("query not found")
+	}
+
+	for col := range cols {
+		// Add subquery for the current collection
+		subquery := fmt.Sprintf(query_base, cols[col],filter)
+		subqueries = append(subqueries, subquery)
+	}
+	// # Combine subqueries using UNION
+	query := fmt.Sprintf(`
+        FOR node IN UNION(
+            %s
+        )
+        RETURN node
+    `, strings.Join(subqueries, ","))
+
+	return query, bindVars, nil
+}
+
+func mapToStruct(m map[string]interface{}, result interface{}) error {
+    data, err := json.Marshal(m)
+    if err != nil {
+        return err
+    }
+    return json.Unmarshal(data, result)
+}
+
+
+
+// GetNodesByRegex(regex string) ([]Node, error)
+func (ag *ArangoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
+	ctx := context.Background()
+	// list all the node collections
+	collections, err := ag.db.Collections(ctx)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to list collections: %v", err)
+		return nil, err
+	}
+
+	// get all node collections
+	var nodeCollections []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+			return nil, err
+		}
+
+		// Skip system collections
+		if props.IsSystem {
+			continue
+		}
+
+		// Skip edge collections
+		if props.Type == driver.CollectionTypeEdge {
+			continue
+		}
+
+		nodeCollections = append(nodeCollections, col.Name())
+	}
+
+	q := map[string]interface{}{
+		// # 
+		"collections":  nodeCollections,
+		"regexPatterns": []string{regex},
+		// "filter": "REGEX_MATCHES(node.name, @regex0, true)",
+		"filter": `
+            REGEX_MATCHES(node.name, @regex0, true) 
+        `,
+		"query": `
+			FOR node IN %s
+			FILTER %s
+			RETURN node
+		`,
+	}
+
+	query, bindVars, err := QueryGenerator(q)
+
+    if err != nil {
+        return nil, err
+    }
+	
+	db, err := ag.Client.Database(ctx, ag.dbname)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
+		return nil, err
+	}
+
+
+	cursor, err := db.Query(ctx, query, bindVars)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
+		return nil, err
+	}
+	defer cursor.Close()
+
+	var nodes []*Node
+	for {
+		var node Node
 		_, err := cursor.ReadDocument(ctx, &node)
 		if driver.IsNoMoreDocuments(err) {
 			break
@@ -1023,28 +1287,76 @@ func (ag *ArangoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
 			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
 			return nil, err
 		}
-		nodes = append(nodes, node)
+		nodes = append(nodes, &node)
 	}
 
-	return nodes, nil
+	// Convert []*Node to []handler.Node
+	handlerNodes := make([]handler.Node, len(nodes))
+	for i, n := range nodes {
+		handlerNodes[i] = n
+	}
+
+	return handlerNodes, nil
 }
 
 // GetEdgesByRegex(regex string) ([]Edge, error)
 func (ag *ArangoGraph) GetEdgesByRegex(regex string) ([]handler.Edge, error) {
 	ctx := context.Background()
+	// list all the edge collections
+	collections, err := ag.db.Collections(ctx)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to list collections: %v", err)
+		return nil, err
+	}
+
+	// get all edge collections
+	var edgeCollections []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			ag.logger.Info().Msgf("Failed to get collection properties: %v", err)
+			return nil, err
+		}
+
+		// Skip system collections
+		if props.IsSystem {
+			continue
+		}
+
+		// Skip node collections
+		if props.Type == driver.CollectionTypeDocument {
+			continue
+		}
+
+		edgeCollections = append(edgeCollections, col.Name())
+	}
+
+	q := map[string]interface{}{
+		// # 
+		"collections":  edgeCollections,
+		"regexPatterns": []string{regex},
+		// "filter": "REGEX_MATCHES(node.name, @regex0, true)",
+		"filter": `
+			LENGTH(edge.relationship) > 0 AND 
+			REGEX_MATCHES(edge.relationship, @regex0, true) 
+		`,
+		"query": `
+			FOR edge IN %s
+			FILTER %s
+			RETURN edge
+		`,
+	}
+
+	query, bindVars, err := QueryGenerator(q)
+
+	if err != nil {
+		return nil, err
+	}
+	
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
 		return nil, err
-	}
-
-	query := `
-	FOR edge IN edges
-	FILTER REGEX_MATCHES(edge.relationship, @regex, true)
-	RETURN edge
-	`
-	bindVars := map[string]interface{}{
-		"regex": regex,
 	}
 
 	cursor, err := db.Query(ctx, query, bindVars)
@@ -1052,11 +1364,12 @@ func (ag *ArangoGraph) GetEdgesByRegex(regex string) ([]handler.Edge, error) {
 		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
 		return nil, err
 	}
+
 	defer cursor.Close()
 
-	var edges []handler.Edge
+	var edges []*Edge
 	for {
-		var edge handler.Edge
+		var edge Edge
 		_, err := cursor.ReadDocument(ctx, &edge)
 		if driver.IsNoMoreDocuments(err) {
 			break
@@ -1064,10 +1377,18 @@ func (ag *ArangoGraph) GetEdgesByRegex(regex string) ([]handler.Edge, error) {
 			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
 			return nil, err
 		}
-		edges = append(edges, edge)
+		edges = append(edges, &edge)
 	}
 
-	return edges, nil
+	// Convert []*Edge to []handler.Edge
+	handlerEdges := make([]handler.Edge, len(edges))
+	for i, e := range edges {
+		handlerEdges[i] = e
+	}
+
+	return handlerEdges, nil
+
+
 }
 
 // GetFromNodes(name interface{}) ([]Node, error)

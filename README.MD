@@ -29,3 +29,5 @@ The key query I can think of right now is given a piece of info, and exact sever
 Make the info update continuously, maybe by some crawler or pdf(financial statement) processor based on the LLM, users would have their own local knowledge graph, for confideniallity reasons that may be concerned in Investment
 
 let's see if it can further serve the llm as local knowledge
+
+

@@ -23,6 +23,7 @@ type Node struct {
 }
 
 
+
 // implement the handler Node interface
 func (n *Node) Export() map[string]interface{} {
 	return map[string]interface{}{
@@ -39,21 +40,19 @@ func (n *Node) CustomMarshalJSON() ([]byte, error) {
 	type Alias Node
 	infos := strings.Split(n.ID, "/")
 
-
 	return json.Marshal(&struct {
 		*Alias
 		Key string `json:"_key"`
 	}{
 		Alias: (*Alias)(n),
-		Key:    infos[1],
+		Key:   infos[1],
 	})
 }
-
 
 // CustomUnmarshalJSON is the custom unmarshal function for the Node struct
 // in which the json file _id has collection/key format
 func (n *Node) CustomUnmarshalJSON(data []byte) error {
-	
+
 	if err := json.Unmarshal(data, &n); err != nil {
 		return err
 	}
@@ -63,11 +62,11 @@ func (n *Node) CustomUnmarshalJSON(data []byte) error {
 }
 
 type Edge struct {
-	ID           string `json:"_id"`
-	Relationship string	`json:"relationship"`
-	Collection   string	`json:"-"`
-	From         string `json:"_from"`
-	To           string	`json:"_to"`
+	ID           string                 `json:"_id"`
+	Relationship string                 `json:"relationship"`
+	Collection   string                 `json:"-"`
+	From         string                 `json:"_from"`
+	To           string                 `json:"_to"`
 	Data         map[string]interface{} `json:"data,omitempty"`
 }
 
@@ -77,13 +76,14 @@ func (e *Edge) Export() map[string]interface{} {
 		"_id":          e.ID,
 		"relationship": e.Relationship,
 		"collection":   e.Collection,
-		"_from":         e.From,
-		"_to":           e.To,
+		"_from":        e.From,
+		"_to":          e.To,
 		"data":         e.Data,
 	}
 }
 
-//  CustomMarshalJSON is the custom marshal function for the Edge struct
+//	CustomMarshalJSON is the custom marshal function for the Edge struct
+//
 // in which the json file _id has collection/key format
 func (e *Edge) CustomMarshalJSON() ([]byte, error) {
 	type Alias Edge
@@ -94,7 +94,7 @@ func (e *Edge) CustomMarshalJSON() ([]byte, error) {
 		Key string `json:"_key"`
 	}{
 		Alias: (*Alias)(e),
-		Key:    infos[1],
+		Key:   infos[1],
 	})
 }
 
@@ -108,9 +108,6 @@ func (e *Edge) CustomUnmarshalJSON(data []byte) error {
 	e.Collection = strings.Split(e.ID, "/")[0]
 	return nil
 }
-
-
-
 
 // ArangoGraph is the struct for the ArangoDB
 type ArangoGraph struct {
