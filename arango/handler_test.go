@@ -216,18 +216,16 @@ func TestArangoGraph_CRUD(t *testing.T) {
 
 
 	// - GetItemByID
-	tmp1, err := ag.GetItemByID(nodeTests[0].meta.ID)
+	_, err = ag.GetItemByID(nodeTests[0].meta.ID)
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
-	fmt.Println(tmp1)
 
 	// - GetNode
-	tmp2, err := ag.GetNode(nodeTests[0].node.Name)
+	_, err = ag.GetNode(nodeTests[0].node.Name)
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
-	fmt.Println(tmp2)
 
 	// !GetNodesByRegex
 	ns, err := ag.GetNodesByRegex(".*test.*")
@@ -249,44 +247,44 @@ func TestArangoGraph_CRUD(t *testing.T) {
 	}
 
 	// GetFromNodes
-	// ns, err = ag.GetFromNodes(node2.Name)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	ns, err = ag.GetFromNodes(nodeTests[0].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// if len(ns) != 1 {
-	// 	t.Errorf("Test failed, expected 2, got %v", len(ns))
-	// }
+	if len(ns) != 1 {
+		t.Errorf("Test failed, expected 1, got %v", len(ns))
+	}
 
-	// // GetToNodes
-	// ns, err = ag.GetToNodes(node.Name)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// GetToNodes
+	ns, err = ag.GetToNodes(nodeTests[0].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// if len(ns) != 2 {
-	// 	t.Errorf("Test failed, expected 2, got %v", len(ns))
-	// }
+	if len(ns) != 1 {
+		t.Errorf("Test failed, expected 2, got %v", len(ns))
+	}
 
-	// // GetInEdges
-	// es, err := ag.GetInEdges(node.Name)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// GetInEdges
+	es, err = ag.GetInEdges(nodeTests[0].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// if len(es) != 2 {
-	// 	t.Errorf("Test failed, expected 2, got %v", len(es))
-	// }
+	if len(es) != 1 {
+		t.Errorf("Test failed, expected 2, got %v", len(es))
+	}
 
-	// // GetOutEdges
-	// es, err = ag.GetOutEdges(node2.Name)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// GetOutEdges
+	es, err = ag.GetOutEdges(nodeTests[1].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// if len(es) != 2 {
-	// 	t.Errorf("Test failed, expected 2, got %v", len(es))
-	// }
+	if len(es) != 2 {
+		t.Errorf("Test failed, expected 2, got %v", len(es))
+	}
 
 	// ~ delete the graph and all its nodes and edges
 	options := driver.RemoveGraphOptions{

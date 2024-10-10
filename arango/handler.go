@@ -361,7 +361,7 @@ func (ag *ArangoGraph) AddNode(ni handler.Node) (interface{}, error) {
 			})
 			if err != nil {
 				ag.logger.Info().Msgf("Failed to create index: %v", err)
-				return nil,err
+				return nil, err
 			}
 		}
 	}
@@ -584,7 +584,6 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 		return fmt.Errorf("edge id is blank")
 	}
 
-
 	// # check if the edge exists
 	exists, err := ag.checkItemExists(e.ID)
 	if err != nil {
@@ -637,7 +636,7 @@ func (ag *ArangoGraph) ReplaceEdge(ei handler.Edge) error {
 }
 
 // UpdateNode(n Node) error
-// - Only the specified fields in the update document are modified. 
+// - Only the specified fields in the update document are modified.
 // - Fields that are not specified in the update document remain unchanged.
 
 func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
@@ -678,7 +677,7 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	// # check if the node exists
 	exists, err := ag.checkItemExists(n.ID)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for node: %v",err)
+		ag.logger.Fatal().Msgf("Failed to check for node: %v", err)
 		return err
 	}
 	if !exists {
@@ -690,13 +689,13 @@ func (ag *ArangoGraph) UpdateNode(ni handler.Node) error {
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v",err)
+		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
 		return err
 	}
 
 	col, err := db.Collection(ctx, infos[0])
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open collection: %v",	err)
+		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return err
 	}
 	// % create the doc for update
@@ -918,7 +917,7 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 	// # check if the edge exists
 	exists, err := ag.checkItemExists(e.ID)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for edge: %v",err)
+		ag.logger.Fatal().Msgf("Failed to check for edge: %v", err)
 		return err
 	}
 	if !exists {
@@ -937,14 +936,14 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v",err)
+		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
 		return err
 	}
 
 	col, err := db.Collection(ctx, infos[0])
 
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open collection: %v",err)
+		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return err
 	}
 
@@ -1133,11 +1132,6 @@ func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 	}
 }
 
-
-
-
-
-
 // GetNode(name interface{}) (Node, error)
 func (ag *ArangoGraph) GetNode(name interface{}) (handler.Node, error) {
 	// convert the name into string
@@ -1260,6 +1254,7 @@ func mapToStruct(m map[string]interface{}, result interface{}) error {
 }
 
 // GetNodesByRegex(regex string) ([]Node, error)
+// Search by regex in the node name fields
 func (ag *ArangoGraph) GetNodesByRegex(regex string) ([]handler.Node, error) {
 	ctx := context.Background()
 	// list all the node collections
@@ -1484,10 +1479,10 @@ func (ag *ArangoGraph) GetFromNodes(name interface{}) ([]handler.Node, error) {
 
 	// Combine subqueries using UNION
 	query := fmt.Sprintf(`
-        FOR edge IN UNION(
+        FOR fromNS IN UNION(
             %s
         )
-        RETURN edge
+        RETURN fromNS
     `, strings.Join(subqueries, ","))
 
 	bindVars := map[string]interface{}{
@@ -1543,55 +1538,74 @@ func (ag *ArangoGraph) GetToNodes(name interface{}) ([]handler.Node, error) {
 
 	// get the edges from the edge collection
 	ctx := context.Background()
-	db, err := ag.Client.Database(ctx, ag.dbname)
+	// Retrieve the list of collections
+	collections, err := ag.db.Collections(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to list collections: %v", err)
 	}
 
-	query := `
-	FOR edge IN edges
-	FILTER edge._from == @id
-	RETURN edge
-	`
+	var subqueries []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get collection properties: %v", err)
+		}
+
+		// Check if the collection is an edge collection
+		// Check if the collection is system collection
+		if props.Type == driver.CollectionTypeEdge && !props.IsSystem {
+			// Add subquery for the current edge collection
+			subquery := fmt.Sprintf(`
+				FOR edge IN %s
+				FILTER edge._from == @id
+				RETURN edge._to
+			`, col.Name())
+			subqueries = append(subqueries, subquery)
+		}
+	}
+
+	// Combine subqueries using UNION
+	query := fmt.Sprintf(`
+		FOR toNS IN UNION(
+			%s
+		)
+		RETURN toNS
+	`, strings.Join(subqueries, ","))
+
 	bindVars := map[string]interface{}{
 		"id": id,
 	}
 
-	cursor, err := db.Query(ctx, query, bindVars)
+	cursor, err := ag.db.Query(ctx, query, bindVars)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer cursor.Close()
 
-	var nodes []handler.Node
+	var toNodes []handler.Node
 	for {
-		var edge Edge
-		_, err := cursor.ReadDocument(ctx, &edge)
+		var to string
+		_, err := cursor.ReadDocument(ctx, &to)
 		if driver.IsNoMoreDocuments(err) {
 			break
 		} else if err != nil {
-			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to read document: %v", err)
 		}
-
 		// get the node
-		node, err := ag.GetItemByID(edge.To)
+		node, err := ag.GetItemByID(to)
 		if err != nil {
-			ag.logger.Fatal().Msgf("Failed to get node: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to get node: %v", err)
 		}
 
-		n, ok := node.(handler.Node)
+		n, ok := node.(Node)
 		if !ok {
-			ag.logger.Fatal().Msgf("Invalid node: %v", node)
 			return nil, fmt.Errorf("invalid node")
 		}
-		nodes = append(nodes, n)
+		toNodes = append(toNodes, &n)
 	}
 
-	return nodes, nil
+	return toNodes, nil
+
 }
 
 // GetInEdges(name interface{}) ([]Edge, error)
@@ -1612,39 +1626,60 @@ func (ag *ArangoGraph) GetInEdges(name interface{}) ([]handler.Edge, error) {
 
 	// get the edges from the edge collection
 	ctx := context.Background()
-	db, err := ag.Client.Database(ctx, ag.dbname)
+	// Retrieve the list of collections
+	collections, err := ag.db.Collections(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to list collections: %v", err)
 	}
 
-	query := `
-	FOR edge IN edges
-	FILTER edge._to == @id
-	RETURN edge
-	`
+	var subqueries []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get collection properties: %v", err)
+		}
+
+		// Check if the collection is an edge collection
+		// Check if the collection is system collection
+		if props.Type == driver.CollectionTypeEdge && !props.IsSystem {
+			// Add subquery for the current edge collection
+			subquery := fmt.Sprintf(`
+				FOR edge IN %s
+				FILTER edge._to == @id
+				RETURN edge
+			`, col.Name())
+			subqueries = append(subqueries, subquery)
+		}
+	}
+
+	// Combine subqueries using UNION
+	query := fmt.Sprintf(`
+		FOR edge IN UNION(
+			%s
+		)
+		RETURN edge
+	`, strings.Join(subqueries, ","))
+
 	bindVars := map[string]interface{}{
 		"id": id,
 	}
 
-	cursor, err := db.Query(ctx, query, bindVars)
+	cursor, err := ag.db.Query(ctx, query, bindVars)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer cursor.Close()
 
 	var edges []handler.Edge
 	for {
-		var edge handler.Edge
+		var edge Edge
 		_, err := cursor.ReadDocument(ctx, &edge)
 		if driver.IsNoMoreDocuments(err) {
 			break
 		} else if err != nil {
-			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to read document: %v", err)
 		}
-		edges = append(edges, edge)
+		edges = append(edges, &edge)
 	}
 
 	return edges, nil
@@ -1668,42 +1703,63 @@ func (ag *ArangoGraph) GetOutEdges(name interface{}) ([]handler.Edge, error) {
 
 	// get the edges from the edge collection
 	ctx := context.Background()
-	db, err := ag.Client.Database(ctx, ag.dbname)
+	// Retrieve the list of collections
+	collections, err := ag.db.Collections(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to list collections: %v", err)
 	}
 
-	query := `
-	FOR edge IN edges
-	FILTER edge._from == @id
-	RETURN edge
-	`
+	var subqueries []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get collection properties: %v", err)
+		}
+
+		// Check if the collection is an edge collection
+		// Check if the collection is system collection
+		if props.Type == driver.CollectionTypeEdge && !props.IsSystem {
+			// Add subquery for the current edge collection
+			subquery := fmt.Sprintf(`
+				FOR edge IN %s
+				FILTER edge._from == @id
+				RETURN edge
+			`, col.Name())
+			subqueries = append(subqueries, subquery)
+		}
+	}
+
+	// Combine subqueries using UNION
+	query := fmt.Sprintf(`
+		FOR edge IN UNION(
+			%s
+		)
+		RETURN edge
+	`, strings.Join(subqueries, ","))
+
 	bindVars := map[string]interface{}{
 		"id": id,
 	}
 
-	cursor, err := db.Query(ctx, query, bindVars)
+	cursor, err := ag.db.Query(ctx, query, bindVars)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to execute query: %v", err)
 	}
 	defer cursor.Close()
 
 	var edges []handler.Edge
 	for {
-		var edge handler.Edge
+		var edge Edge
 		_, err := cursor.ReadDocument(ctx, &edge)
 		if driver.IsNoMoreDocuments(err) {
 			break
 		} else if err != nil {
-			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to read document: %v", err)
 		}
-		edges = append(edges, edge)
+		edges = append(edges, &edge)
 	}
 
-	return edges, nil
+	return edges , nil
 }
 
 // + Graph operations

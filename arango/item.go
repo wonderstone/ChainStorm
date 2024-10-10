@@ -17,7 +17,7 @@ import (
 // "-" 表示不输出到 JSON 字符串中
 type Node struct {
 	ID         string                 `json:"_id"`
-	Collection string                 `json:"-"`
+	Collection string                 `json:"collection"`
 	Name       string                 `json:"name"`
 	Data       map[string]interface{} `json:"data,omitempty"`
 }
