@@ -1279,3 +1279,104 @@
 {"level":"info","time":"2024-10-10T14:00:46+08:00","message":"Document knows/127669 exists"}
 {"level":"info","time":"2024-10-10T14:00:46+08:00","message":"Document persons/127643 exists"}
 {"level":"info","time":"2024-10-10T14:00:57+08:00","message":"Document knows/127669 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Collection persons created"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Collection movies created"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Collection knows created"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128136 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128139 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/alice does not exist"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"from node persons/alice not exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Collection likes created"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128139 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128136 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128139 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document movies/128151 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128136 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document knows/128162 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document persons/128136 exists"}
+{"level":"info","time":"2024-10-10T14:12:48+08:00","message":"Document knows/128162 exists"}
+{"level":"info","time":"2024-10-10T14:13:01+08:00","message":"Document persons/128136 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Collection persons created"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Collection movies created"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Collection knows created"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128413 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128416 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/alice does not exist"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"from node persons/alice not exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Collection likes created"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128416 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128413 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128416 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document movies/128428 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128413 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document knows/128439 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document persons/128413 exists"}
+{"level":"info","time":"2024-10-10T14:16:01+08:00","message":"Document knows/128439 exists"}
+{"level":"info","time":"2024-10-10T16:01:39+08:00","message":"Document persons/128413 exists"}
+{"level":"info","time":"2024-10-10T16:08:49+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T16:08:49+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T16:08:49+08:00","message":"Failed to create document: unique constraint violated - in index idx_1812506567199686656 of type persistent over 'name'; conflicting key: 128413"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Collection persons created"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Collection movies created"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Collection knows created"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131320 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131323 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/alice does not exist"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"from node persons/alice not exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Collection likes created"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131323 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131320 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131323 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document movies/131335 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131320 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document knows/131346 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131320 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document knows/131346 exists"}
+{"level":"info","time":"2024-10-10T16:09:33+08:00","message":"Document persons/131320 exists"}
+{"level":"info","time":"2024-10-10T16:09:46+08:00","message":"Document knows/131346 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Collection persons created"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Collection movies created"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Collection knows created"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131785 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131788 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/alice does not exist"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"from node persons/alice not exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Collection likes created"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131788 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131785 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131788 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document movies/131800 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131785 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document knows/131811 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131785 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document knows/131811 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document persons/131785 exists"}
+{"level":"info","time":"2024-10-10T16:20:16+08:00","message":"Document knows/131811 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"ArangoGraph initialized"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Connected to ArangoDB"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Collection persons created"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Collection movies created"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Collection knows created"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131994 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131997 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/alice does not exist"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"from node persons/alice not exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Collection likes created"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131997 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131994 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131997 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document movies/132009 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131994 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document knows/132020 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131994 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document knows/132020 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document persons/131994 exists"}
+{"level":"info","time":"2024-10-10T16:21:40+08:00","message":"Document knows/132020 exists"}

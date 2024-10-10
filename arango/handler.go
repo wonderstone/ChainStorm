@@ -784,6 +784,8 @@ func (ag *ArangoGraph) UpdateEdge(ei handler.Edge) error {
 }
 
 // MergeNode(n Node) error
+// - The same fields in the document are added together
+
 func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 	// convert ni to Node
 	var n Node
@@ -794,24 +796,32 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		return fmt.Errorf("invalid input")
 	}
 
-	// check if the id is blank, if yes, get the id from the bidimap
-	if n.ID == "" {
-		id, ok := ag.nodeNameToIDMap.Get(n.Name)
-		if !ok {
-			ag.logger.Fatal().Msgf("Node %s does not exist", n.Name)
-			return fmt.Errorf("node does not exist")
+	// # get the id from the bidimap
+	// % if the id is blank, assign the id from the bidimap
+	// % if the id is not blank, check if they are the same, if not, return an error
+	id, ok := ag.nodeNameToIDMap.Get(n.Name)
+	if !ok {
+		ag.logger.Fatal().Msgf("Node %s does not exist", n.Name)
+		return fmt.Errorf("node does not exist")
+	}
+
+	if n.ID != "" {
+		if n.ID != id.(driver.DocumentID).String() {
+			ag.logger.Fatal().Msgf("ID %s does not match the ID in the bidimap %s", n.ID, id.(driver.DocumentID).String())
+			return fmt.Errorf("id does not match")
 		}
+	} else {
 		n.ID = id.(driver.DocumentID).String()
 	}
 
-	// get the collection and key from the id
+	// # get the collection and key from the id
 	infos := strings.Split(n.ID, "/")
 	if len(infos) != 2 {
 		ag.logger.Fatal().Msgf("Invalid id: %s", n.ID)
 		return fmt.Errorf("invalid id")
 	}
 
-	// check if the node exists
+	// # check if the node exists
 	exists, err := ag.checkItemExists(n.ID)
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to check for node: %v", err)
@@ -822,7 +832,7 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		return fmt.Errorf("node does not exist")
 	}
 
-	// merge the node
+	// # replace the node
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
@@ -830,13 +840,13 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		return err
 	}
 
-	col, err := db.Collection(ctx, n.Collection)
+	col, err := db.Collection(ctx, infos[0])
 	if err != nil {
 		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
 		return err
 	}
 
-	// get the old data
+	// # get the old data
 	var oldNode Node
 	_, err = col.ReadDocument(ctx, infos[1], &oldNode)
 	if err != nil {
@@ -844,9 +854,9 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		return err
 	}
 
-	// merge the data
-	// if the data is new, add it to the oldNode
-	// if the data is not new, add it to the oldNode
+	// # merge the data
+	// $ if the data is new, add it to the oldNode
+	// $ if the data is not new, oldNode same fields are added together
 	for k, v := range n.Data {
 		if _, ok := oldNode.Data[k]; !ok {
 			oldNode.Data[k] = v
@@ -882,8 +892,6 @@ func (ag *ArangoGraph) MergeNode(ni handler.Node) error {
 		return err
 	}
 
-	// // update the node info in the bidirectional map nodeNameToIDMap
-	// ag.nodeNameToIDMap.Put(n.Name, n.ID)
 	return nil
 
 }
@@ -900,40 +908,47 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 		return fmt.Errorf("invalid input")
 	}
 
-	// check if the edge exists
-	exists, err := ag.checkItemExists(e.ID)
-	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to check for edge: %v", err)
-		return err
+	// = For edge, must have the id
+	// = if the id is blank, return an error
+	if e.ID == "" {
+		ag.logger.Fatal().Msgf("Edge id is blank")
+		return fmt.Errorf("edge id is blank")
 	}
 
+	// # check if the edge exists
+	exists, err := ag.checkItemExists(e.ID)
+	if err != nil {
+		ag.logger.Fatal().Msgf("Failed to check for edge: %v",err)
+		return err
+	}
 	if !exists {
 		ag.logger.Fatal().Msgf("Edge %s does not exist", e.ID)
 		return fmt.Errorf("edge does not exist")
 	}
 
-	// get the collection and key from the id
+	// # get the collection and key from the id
 	infos := strings.Split(e.ID, "/")
 	if len(infos) != 2 {
 		ag.logger.Fatal().Msgf("Invalid id: %s", e.ID)
 		return fmt.Errorf("invalid id")
 	}
 
-	// merge the edge
+	// # update the edge
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
+		ag.logger.Fatal().Msgf("Failed to open database: %v",err)
 		return err
 	}
 
-	col, err := db.Collection(ctx, e.Collection)
+	col, err := db.Collection(ctx, infos[0])
+
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open collection: %v", err)
+		ag.logger.Fatal().Msgf("Failed to open collection: %v",err)
 		return err
 	}
 
-	// get the old data
+	// # get the old data
 	var oldEdge Edge
 	_, err = col.ReadDocument(ctx, infos[1], &oldEdge)
 	if err != nil {
@@ -941,9 +956,9 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 		return err
 	}
 
-	// merge the data
-	// if the data is new, add it to the oldEdge
-	// if the data is not new, add it to the oldEdge
+	// # merge the data
+	// $ if the data is new, add it to the oldEdge
+	// $ if the data is not new, oldEdge same fields are added together
 	for k, v := range e.Data {
 		if _, ok := oldEdge.Data[k]; !ok {
 			oldEdge.Data[k] = v
@@ -961,12 +976,12 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 					oldEdge.Data[k] = oldEdge.Data[k].(bool) || v.(bool)
 				default:
 					ag.logger.Fatal().Msgf("Invalid data type")
-
 				}
 			}
-
 		}
 	}
+
+	// update the edge
 	doc := make(map[string]interface{})
 	doc["data"] = oldEdge.Data
 	doc["_id"] = e.ID
@@ -982,6 +997,7 @@ func (ag *ArangoGraph) MergeEdge(ei handler.Edge) error {
 	}
 
 	return nil
+
 }
 
 // + Delete operations
@@ -1061,11 +1077,11 @@ func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 	ctx := context.Background()
 	// type assertion to check if the id is a string
 	var idStr string
-	switch id.(type) {
+	switch id := id.(type) {
 	case string:
-		idStr = id.(string)
+		idStr = id
 	case driver.DocumentID:
-		idStr = id.(driver.DocumentID).String()
+		idStr = id.String()
 	default:
 		ag.logger.Fatal().Msgf("Invalid id: %v", id)
 		return nil, fmt.Errorf("invalid id")
@@ -1085,16 +1101,42 @@ func (ag *ArangoGraph) GetItemByID(id interface{}) (interface{}, error) {
 		return nil, err
 	}
 
-	// get the document by _id
-	var doc Node
-	_, err = col.ReadDocument(ctx, infos[1], &doc)
+	// check the collection type
+	// if it is a node collection, return node
+	// if it is an edge collection, return edge
+	props, err := col.Properties(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to get document: %v", err)
+		ag.logger.Fatal().Msgf("Failed to get collection properties: %v", err)
 		return nil, err
 	}
 
-	return doc, nil
+	switch props.Type {
+	case driver.CollectionTypeDocument:
+		var doc Node
+		_, err = col.ReadDocument(ctx, infos[1], &doc)
+		if err != nil {
+			ag.logger.Fatal().Msgf("Failed to get document: %v", err)
+			return nil, err
+		}
+		return doc, nil
+	case driver.CollectionTypeEdge:
+		var edge Edge
+		_, err = col.ReadDocument(ctx, infos[1], &edge)
+		if err != nil {
+			ag.logger.Fatal().Msgf("Failed to get document: %v", err)
+			return nil, err
+		}
+		return edge, nil
+	default:
+		ag.logger.Fatal().Msgf("Invalid collection type: %v", props.Type)
+		return nil, fmt.Errorf("invalid collection type")
+	}
 }
+
+
+
+
+
 
 // GetNode(name interface{}) (Node, error)
 func (ag *ArangoGraph) GetNode(name interface{}) (handler.Node, error) {

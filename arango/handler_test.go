@@ -200,41 +200,34 @@ func TestArangoGraph_CRUD(t *testing.T) {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
-	// // test updateEdge
-	// edge.Data = map[string]interface{}{"abcd": "d"}
+	// - mergeNode
+	nodeTests[0].node.Data = map[string]interface{}{"a": "cccc", "abcd": "e", "efg": "h"}
+	err = ag.MergeNode(&nodeTests[0].node)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// err = ag.UpdateEdge(&edge)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// - mergeEdge
+	edgeTests[0].edge.Data = map[string]interface{}{"abcd": "e", "efg": "h"}
+	err = ag.MergeEdge(&edgeTests[0].edge)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
 
-	// // test mergeNode
-	// node.Data = map[string]interface{}{"a": "cccc", "abcd": "d", "efg": "h"}
 
-	// err = ag.MergeNode(&node)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// - GetItemByID
+	tmp1, err := ag.GetItemByID(nodeTests[0].meta.ID)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+	fmt.Println(tmp1)
 
-	// // test mergeEdge
-	// edge.Data = map[string]interface{}{"abcd": "d", "efg": "h"}
-
-	// err = ag.MergeEdge(&edge)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
-
-	// // test getNode
-	// _, err = ag.GetNode(node.Name)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
-
-	// // test GetItemByID
-	// _, err = ag.GetItemByID(meta.(driver.DocumentMeta).ID)
-	// if err != nil {
-	// 	t.Errorf("Test failed, expected nil, got %v", err)
-	// }
+	// - GetNode
+	tmp2, err := ag.GetNode(nodeTests[0].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+	fmt.Println(tmp2)
 
 	// !GetNodesByRegex
 	ns, err := ag.GetNodesByRegex(".*test.*")
@@ -251,8 +244,8 @@ func TestArangoGraph_CRUD(t *testing.T) {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
-	if len(es) != 2 {
-		t.Errorf("Test failed, expected 2, got %v", len(es))
+	if len(es) != 1 {
+		t.Errorf("Test failed, expected 1, got %v", len(es))
 	}
 
 	// GetFromNodes
