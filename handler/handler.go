@@ -24,10 +24,18 @@ type GraphDB interface {
 	AddNode(n Node) (interface{}, error)
 	AddEdge(e Edge) (interface{}, error)
 	// + Update operations
+	// - Replace: data field will be replaced
+	// - The existing document is completely replaced by the new document. 
+	// - Any fields that are not specified in the new document will be removed.
 	ReplaceNode(n Node) error
 	ReplaceEdge(e Edge) error
+	// - Update: data field will be updated
+	// - Only the specified fields in the update document are modified. 
+	// - Fields that are not specified in the update document remain unchanged.
 	UpdateNode(n Node) error
 	UpdateEdge(e Edge) error
+	// - Merge: data field will be merged
+	// - The same fields in the document are added together
 	MergeNode(n Node) error
 	MergeEdge(e Edge) error
 	// + Delete operations
