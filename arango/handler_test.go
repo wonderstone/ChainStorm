@@ -1,7 +1,6 @@
 package arango
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -22,7 +21,6 @@ func TestArangoGraph_Init(t *testing.T) {
 }
 
 func TestArangoGraph_CRUD(t *testing.T) {
-	ctx := context.Background()
 
 	// $ Connect to the database
 	ag := ArangoGraph{}
@@ -320,16 +318,66 @@ func TestArangoGraph_CRUD(t *testing.T) {
 
 
 	// ~ delete the graph and all its nodes and edges
-	options := driver.RemoveGraphOptions{
-		DropCollections: true,
-	}
-
-	err = ag.graph.RemoveWithOpts(ctx, &options)
+	err = ag.deleteGraph()
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
 
+	// // add temp node and edge for the delete test
+	// tmpNode = Node{
+	// 	Collection: "persons",
+	// 	Name:       "temp",
+	// 	Data:       map[string]interface{}{"a": "b"},
+	// }
+	// // add temp node
+	// meta, err := ag.AddNode(&tmpNode)
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
+	
+	// tmpNode1 := Node{
+	// 	Collection: "persons",
+	// 	Name:       "temp1",
+	// 	Data:       map[string]interface{}{"a": "b"},
+	// }
+	// // add temp node
+	// meta1, err := ag.AddNode(&tmpNode1)
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
 
+	// // tmpEdge
+	// tmpEdge = Edge{
+	// 	Collection:   "knows",
+	// 	From:         meta.(driver.DocumentMeta).ID.String(),
+	// 	To:           meta1.(driver.DocumentMeta).ID.String(),
+	// 	Relationship: "knows in school as classmate",
+	// 	Data:         map[string]interface{}{"aa": "bb"},
+	// }
+	// // add temp edge
+	// metaedge, err := ag.AddEdge(&tmpEdge)
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
+
+	// // - DeleteNode
+	// err = ag.DeleteNode(tmpNode.Name)
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
+
+	// // - DeleteItemByID
+	// err = ag.DeleteItemByID(meta1.(driver.DocumentMeta).ID.String())
+	
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
+
+
+	// err = ag.DeleteItemByID(metaedge.(driver.DocumentMeta).ID)
+	// if err != nil {
+	// 	t.Errorf("Test failed, expected nil, got %v", err)
+	// }
 
 }
 

@@ -84,7 +84,19 @@ func (ag *ArangoGraph) Connect() error {
 		return err
 	}
 
+	// create the bidimap
+	err = ag.createBidimap()
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+// - bidiMap creation
+func (ag *ArangoGraph) createBidimap() error {
 	// list all the node collections
+	ctx := context.Background()
 	collections, err := ag.db.Collections(ctx)
 	if err != nil {
 		ag.logger.Info().Msgf("Failed to list collections: %v", err)
@@ -205,7 +217,9 @@ func (ag *ArangoGraph) Connect() error {
 	ag.logger.Info().Msgf("Connected to ArangoDB")
 
 	return nil
+
 }
+
 
 // Disconnect() error
 
@@ -220,7 +234,7 @@ func (ag *ArangoGraph) Disconnect() error {
 	return nil
 }
 
-// todo: createGraph
+// % createGraph
 func (ag *ArangoGraph) createGraph() error {
 	// get all the collections
 
@@ -278,6 +292,23 @@ func (ag *ArangoGraph) createGraph() error {
 	}
 
 	return nil
+}
+// % deleteGraph
+func (ag *ArangoGraph) deleteGraph() error{
+	ctx := context.Background()
+	options := driver.RemoveGraphOptions{
+		DropCollections: true,
+	}
+
+	err := ag.graph.RemoveWithOpts(ctx, &options)
+	if err != nil {
+		return err
+	}
+	// rebuild the bidimap
+	ag.nodeNameToIDMap = hashbidimap.New()
+	err = ag.createBidimap()
+	return err
+
 }
 
 // - CRUD operations
@@ -1016,9 +1047,6 @@ func (ag *ArangoGraph) DeleteNode(name interface{}) error {
 		return err
 	}
 
-	// remove the node from the bidimap
-	ag.nodeNameToIDMap.Remove(name)
-
 	return nil
 
 }
@@ -1026,10 +1054,14 @@ func (ag *ArangoGraph) DeleteNode(name interface{}) error {
 // DeleteItemByID(id interface{}) error
 func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 	ctx := context.Background()
-
-	// convert id to string
-	idStr, ok := id.(string)
-	if !ok {
+	var idStr string
+	// type assertion to check if the id is a string
+	switch id := id.(type) {
+	case string:
+		idStr = id
+	case driver.DocumentID:
+		idStr = id.String()
+	default:
 		ag.logger.Fatal().Msgf("Invalid id: %v", id)
 		return fmt.Errorf("invalid id")
 	}
@@ -1048,26 +1080,70 @@ func (ag *ArangoGraph) DeleteItemByID(id interface{}) error {
 		return err
 	}
 
-	// delete the document by _id
-	_, err = col.RemoveDocument(ctx, infos[1])
+	// check the collection type
+	props, err := col.Properties(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to delete document: %v", err)
+		ag.logger.Fatal().Msgf("Failed to get collection properties: %v", err)
 		return err
 	}
 
-	// remove the node from the bidimap
-	// bidimap name is the name, value is the id
-	// so we need to to get the name first
-	// then remove the name which is the name
-	// then remove the value which is the id
-	name, ok := ag.nodeNameToIDMap.GetKey(idStr)
-	if !ok {
-		ag.logger.Fatal().Msgf("Node %s does not exist", idStr)
-		return fmt.Errorf("node does not exist")
-	}
-	ag.nodeNameToIDMap.Remove(name)
+	switch props.Type {
+	case driver.CollectionTypeDocument:
+		// delete the document by _id
+		_, err = col.RemoveDocument(ctx, infos[1])
+		if err != nil {
+			ag.logger.Fatal().Msgf("Failed to delete document: %v", err)
+			return err
+		}
 
-	return nil
+		// remove the node from the bidimap
+		// bidimap name is the name, value is the id
+		// so we need to to get the name first
+		// then remove the name which is the name
+		// then remove the value which is the id
+
+		// if id type is driver.DocumentID
+		switch id := id.(type) {
+		case driver.DocumentID:
+			name, ok := ag.nodeNameToIDMap.GetKey(id)
+			if !ok {
+				ag.logger.Fatal().Msgf("Node %s does not exist", idStr)
+				return fmt.Errorf("node does not exist")
+			}
+
+			ag.nodeNameToIDMap.Remove(name)
+			return nil
+
+		case string:
+			name, ok := ag.nodeNameToIDMap.GetKey(driver.DocumentID(id))
+			if !ok {
+				ag.logger.Fatal().Msgf("Node %s does not exist", idStr)
+				return fmt.Errorf("node does not exist")
+			}
+
+			ag.nodeNameToIDMap.Remove(name)
+			return nil
+
+		default:
+			ag.logger.Fatal().Msgf("Invalid id: %v", id)
+			return fmt.Errorf("invalid id")
+
+		}
+
+	case driver.CollectionTypeEdge:
+		// delete the document by _id
+		_, err = col.RemoveDocument(ctx, infos[1])
+		if err != nil {
+			ag.logger.Fatal().Msgf("Failed to delete document: %v", err)
+			return err
+		}
+
+		return nil
+	default:
+		ag.logger.Fatal().Msgf("Invalid collection type: %v", props.Type)
+		return fmt.Errorf("invalid collection type")
+	}
+
 }
 
 // + Query operations
