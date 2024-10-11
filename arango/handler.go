@@ -1759,28 +1759,36 @@ func (ag *ArangoGraph) GetOutEdges(name interface{}) ([]handler.Edge, error) {
 		edges = append(edges, &edge)
 	}
 
-	return edges , nil
+	return edges, nil
 }
 
 // + Graph operations
 // - Traversal operations
 // GetAllRelatedNodes(name interface{}) ([][]Node, error)
 func (ag *ArangoGraph) GetAllRelatedNodes(name interface{}) ([][]handler.Node, error) {
-	// convert the name into string
+	// Convert the name into a string
 	nameStr, ok := name.(string)
 	if !ok {
 		ag.logger.Fatal().Msgf("Invalid name: %v", name)
 		return nil, fmt.Errorf("invalid name")
 	}
 
-	// get the id from the bidimap with the name
+	// Get the ID from the bidimap with the name
 	id, ok := ag.nodeNameToIDMap.Get(nameStr)
 	if !ok {
 		ag.logger.Fatal().Msgf("Node %s does not exist", nameStr)
 		return nil, fmt.Errorf("node does not exist")
 	}
 
-	// get the edges from the edge collection
+	// Initialize BFS structures
+	queue := []string{id.(driver.DocumentID).String()}
+	visited := make(map[string]bool)
+	visited[id.(driver.DocumentID).String()] = true
+
+	// Create a result slice
+	var result [][]handler.Node
+
+	// Get the database
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
@@ -1788,125 +1796,202 @@ func (ag *ArangoGraph) GetAllRelatedNodes(name interface{}) ([][]handler.Node, e
 		return nil, err
 	}
 
-	query := `
-	FOR edge IN edges
-	FILTER edge._from == @id
-	RETURN edge
-	`
-	bindVars := map[string]interface{}{
-		"id": id,
-	}
-
-	cursor, err := db.Query(ctx, query, bindVars)
+	// Get the list of edge collections
+	collections, err := db.Collections(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
+		ag.logger.Fatal().Msgf("Failed to list collections: %v", err)
 		return nil, err
 	}
-	defer cursor.Close()
 
-	var nodes [][]handler.Node
-	for {
-		var edge Edge
-		_, err := cursor.ReadDocument(ctx, &edge)
-		if driver.IsNoMoreDocuments(err) {
-			break
-		} else if err != nil {
-			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
-			return nil, err
-		}
-
-		// get the node
-		node, err := ag.GetItemByID(edge.To)
+	var edgeCollections []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
 		if err != nil {
-			ag.logger.Fatal().Msgf("Failed to get node: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to get collection properties: %v", err)
 		}
 
-		n, ok := node.(handler.Node)
-		if !ok {
-			ag.logger.Fatal().Msgf("Invalid node: %v", node)
-			return nil, fmt.Errorf("invalid node")
+		if props.Type == driver.CollectionTypeEdge && !props.IsSystem {
+			edgeCollections = append(edgeCollections, col.Name())
 		}
-		nodes = append(nodes, []handler.Node{n})
+
 	}
 
-	return nodes, nil
+	// Iterate over the queue
+	for len(queue) > 0 {
+		var level []handler.Node
+		// Get the length of the queue
+		l := len(queue)
+		// Iterate over the length
+		for i := 0; i < l; i++ {
+			// Get the node ID from the queue
+			nodeID := queue[0]
+			// Remove the node ID from the queue
+			queue = queue[1:]
+
+			// Get the node
+			node, err := ag.GetItemByID(nodeID)
+			if err != nil {
+				ag.logger.Fatal().Msgf("Failed to get node: %v", err)
+				return nil, err
+			}
+
+			n, ok := node.(Node)
+			if !ok {
+				ag.logger.Fatal().Msgf("Invalid node: %v", node)
+				return nil, fmt.Errorf("invalid node")
+			}
+			// Add the node to the level
+			level = append(level, &n)
+
+			// Get the edges from all edge collections
+			for _, edgeCol := range edgeCollections {
+				query := fmt.Sprintf(`
+				 FOR edge IN %s
+				 FILTER edge._from == @id
+				 RETURN edge
+				 `, edgeCol)
+				bindVars := map[string]interface{}{
+					"id": nodeID,
+				}
+
+				cursor, err := db.Query(ctx, query, bindVars)
+				if err != nil {
+					ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
+					return nil, err
+				}
+				defer cursor.Close()
+
+				// Iterate over the edges
+				for {
+					var edge Edge
+					_, err := cursor.ReadDocument(ctx, &edge)
+					if driver.IsNoMoreDocuments(err) {
+						break
+					} else if err != nil {
+						ag.logger.Fatal().Msgf("Failed to read document: %v", err)
+						return nil, err
+					}
+
+					// Check if the node has been visited
+					if _, ok := visited[edge.To]; !ok {
+						// Add the node ID to the queue
+						queue = append(queue, edge.To)
+						// Mark the node as visited
+						visited[edge.To] = true
+					}
+				}
+			}
+		}
+		// Add the level to the result
+		result = append(result, level)
+	}
+
+	return result, nil
 }
 
 // GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...Edge) ([][]Node, error)
 func (ag *ArangoGraph) GetAllRelatedNodesInEdgeSlice(name interface{}, EdgeSlice ...handler.Edge) ([][]handler.Node, error) {
-	// convert the name into string
+	// Convert the name into a string
 	nameStr, ok := name.(string)
 	if !ok {
 		ag.logger.Fatal().Msgf("Invalid name: %v", name)
 		return nil, fmt.Errorf("invalid name")
 	}
 
-	// get the id from the bidimap with the name
-	_, ok = ag.nodeNameToIDMap.Get(nameStr)
-	if !ok {
-		ag.logger.Fatal().Msgf("Node %s does not exist", nameStr)
-		return nil, fmt.Errorf("node does not exist")
-	}
-
-	// get the edges from the edge collection
-	ctx := context.Background()
-	_, err := ag.Client.Database(ctx, ag.dbname)
-	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to open database: %v", err)
-		return nil, err
-	}
-
-	// get the nodes
-	var nodes [][]handler.Node
-	for _, edge := range EdgeSlice {
-
-		// convert the handler.Edge to Edge
-		var e Edge
-		switch v := edge.(type) {
-		case *Edge:
-			e = *v
-		default:
-			ag.logger.Fatal().Msgf("Invalid input")
-			return nil, fmt.Errorf("invalid input")
-		}
-
-		// get the node
-
-		node, err := ag.GetItemByID(e.To)
-		if err != nil {
-			ag.logger.Fatal().Msgf("Failed to get node: %v", err)
-			return nil, err
-		}
-
-		n, ok := node.(handler.Node)
-		if !ok {
-			ag.logger.Fatal().Msgf("Invalid node: %v", node)
-			return nil, fmt.Errorf("invalid node")
-		}
-		nodes = append(nodes, []handler.Node{n})
-	}
-
-	return nodes, nil
-}
-
-// GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
-func (ag *ArangoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][]handler.Node, error) {
-	// convert the name into string
-	nameStr, ok := name.(string)
-	if !ok {
-		ag.logger.Fatal().Msgf("Invalid name: %v", name)
-		return nil, fmt.Errorf("invalid name")
-	}
-
-	// get the id from the bidimap with the name
+	// Get the ID from the bidimap with the name
 	id, ok := ag.nodeNameToIDMap.Get(nameStr)
 	if !ok {
 		ag.logger.Fatal().Msgf("Node %s does not exist", nameStr)
 		return nil, fmt.Errorf("node does not exist")
 	}
 
-	// get the edges from the edge collection
+	// Initialize BFS structures
+	queue := []string{id.(driver.DocumentID).String()}
+	visited := make(map[string]bool)
+	visited[id.(driver.DocumentID).String()] = true
+
+	// Create a result slice
+	var result [][]handler.Node
+
+	// Iterate over the queue
+	for len(queue) > 0 {
+		var level []handler.Node
+		// Get the length of the queue
+		l := len(queue)
+		// Iterate over the length
+		for i := 0; i < l; i++ {
+			// Get the node ID from the queue
+			nodeID := queue[0]
+			// Remove the node ID from the queue
+			queue = queue[1:]
+
+			// Get the node
+			node, err := ag.GetItemByID(nodeID)
+			if err != nil {
+				ag.logger.Fatal().Msgf("Failed to get node: %v", err)
+				return nil, err
+			}
+
+			n, ok := node.(Node)
+			if !ok {
+				ag.logger.Fatal().Msgf("Invalid node: %v", node)
+				return nil, fmt.Errorf("invalid node")
+			}
+			// Add the node to the level
+			level = append(level, &n)
+
+			// Get the edges from all edge collections
+			for _, edge := range EdgeSlice {
+				e, ok := edge.(*Edge)
+				if !ok {
+					return nil, fmt.Errorf("invalid edge type")
+				}
+
+				// Check if the edge.From is the same as the id
+				if e.From == id.(driver.DocumentID).String() {
+					// Check if the node has been visited
+					if _, ok := visited[e.To]; !ok {
+						// Add the node ID to the queue
+						queue = append(queue, e.To)
+						// Mark the node as visited
+						visited[e.To] = true
+					}
+				}
+			}
+		}
+		// Add the level to the result
+		result = append(result, level)
+	}
+
+	return result, nil
+
+}
+
+// GetAllRelatedNodesInRange(name interface{}, max int) ([][]Node, error)
+func (ag *ArangoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][]handler.Node, error) {
+	// Convert the name into a string
+	nameStr, ok := name.(string)
+	if !ok {
+		ag.logger.Fatal().Msgf("Invalid name: %v", name)
+		return nil, fmt.Errorf("invalid name")
+	}
+
+	// Get the ID from the bidimap with the name
+	id, ok := ag.nodeNameToIDMap.Get(nameStr)
+	if !ok {
+		ag.logger.Fatal().Msgf("Node %s does not exist", nameStr)
+		return nil, fmt.Errorf("node does not exist")
+	}
+
+	// Initialize BFS structures
+	queue := []string{id.(driver.DocumentID).String()}
+	visited := make(map[string]bool)
+	visited[id.(driver.DocumentID).String()] = true
+
+	// Create a result slice
+	var result [][]handler.Node
+
+	// Get the database
 	ctx := context.Background()
 	db, err := ag.Client.Database(ctx, ag.dbname)
 	if err != nil {
@@ -1914,49 +1999,101 @@ func (ag *ArangoGraph) GetAllRelatedNodesInRange(name interface{}, max int) ([][
 		return nil, err
 	}
 
-	query := `
-	FOR edge IN edges
-	FILTER edge._from == @id
-	LIMIT @max
-	RETURN edge
-	`
-	bindVars := map[string]interface{}{
-		"id":  id,
-		"max": max,
-	}
-
-	cursor, err := db.Query(ctx, query, bindVars)
+	// Get the list of edge collections
+	collections, err := db.Collections(ctx)
 	if err != nil {
-		ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
+		ag.logger.Fatal().Msgf("Failed to list collections: %v", err)
 		return nil, err
 	}
-	defer cursor.Close()
 
-	var nodes [][]handler.Node
-	for {
-		var edge Edge
-		_, err := cursor.ReadDocument(ctx, &edge)
-		if driver.IsNoMoreDocuments(err) {
-			break
-		} else if err != nil {
-			ag.logger.Fatal().Msgf("Failed to read document: %v", err)
-			return nil, err
-		}
-
-		// get the node
-		node, err := ag.GetItemByID(edge.To)
+	var edgeCollections []string
+	for _, col := range collections {
+		props, err := col.Properties(ctx)
 		if err != nil {
-			ag.logger.Fatal().Msgf("Failed to get node: %v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to get collection properties: %v", err)
 		}
 
-		n, ok := node.(handler.Node)
-		if !ok {
-			ag.logger.Fatal().Msgf("Invalid node: %v", node)
-			return nil, fmt.Errorf("invalid node")
+		if props.Type == driver.CollectionTypeEdge && !props.IsSystem {
+			edgeCollections = append(edgeCollections, col.Name())
 		}
-		nodes = append(nodes, []handler.Node{n})
+
 	}
 
-	return nodes, nil
+	// Iterate over the queue
+	for len(queue) > 0 {
+		var level []handler.Node
+		// Get the length of the queue
+		l := len(queue)
+		// Iterate over the length
+		for i := 0; i < l; i++ {
+			// Get the node ID from the queue
+			nodeID := queue[0]
+			// Remove the node ID from the queue
+			queue = queue[1:]
+
+			// Get the node
+			node, err := ag.GetItemByID(nodeID)
+			if err != nil {
+				ag.logger.Fatal().Msgf("Failed to get node: %v", err)
+				return nil, err
+			}
+
+			n, ok := node.(Node)
+			if !ok {
+				ag.logger.Fatal().Msgf("Invalid node: %v", node)
+				return nil, fmt.Errorf("invalid node")
+			}
+			// Add the node to the level
+			level = append(level, &n)
+
+			// Get the edges from all edge collections
+			for _, edgeCol := range edgeCollections {
+				query := fmt.Sprintf(`
+				FOR edge IN %s
+				FILTER edge._from == @id
+				RETURN edge
+				`, edgeCol)
+				bindVars := map[string]interface{}{
+					"id": nodeID,
+				}
+
+				cursor, err := db.Query(ctx, query, bindVars)
+				if err != nil {
+					ag.logger.Fatal().Msgf("Failed to execute query: %v", err)
+					return nil, err
+				}
+				defer cursor.Close()
+
+				// Iterate over the edges
+				for {
+					var edge Edge
+					_, err := cursor.ReadDocument(ctx, &edge)
+					if driver.IsNoMoreDocuments(err) {
+						break
+					} else if err != nil {
+						ag.logger.Fatal().Msgf("Failed to read document: %v", err)
+						return nil, err
+					}
+
+					// Check if the node has been visited
+					if _, ok := visited[edge.To]; !ok {
+						// Add the node ID to the queue
+						queue = append(queue, edge.To)
+						// Mark the node as visited
+						visited[edge.To] = true
+					}
+				}
+			}
+
+		}
+		// Add the level to the result
+		result = append(result, level)
+
+		// Check if the level is greater than the max
+		if len(result) >= max {
+			break
+		}
+	}
+
+	return result, nil
 }

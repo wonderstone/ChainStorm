@@ -286,6 +286,39 @@ func TestArangoGraph_CRUD(t *testing.T) {
 		t.Errorf("Test failed, expected 2, got %v", len(es))
 	}
 
+	// GetAllRelatedNodes
+	nss, err := ag.GetAllRelatedNodes(nodeTests[1].node.Name)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+	if len(nss) != 2 {
+		t.Errorf("Test failed, expected 2, got %v", len(nss))
+	}
+
+	// GetAllRelatedNodesInEdgeSlice
+	nss, err = ag.GetAllRelatedNodesInEdgeSlice(nodeTests[1].node.Name, es...)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+	if len(nss) != 2 {
+		t.Errorf("Test failed, expected 2, got %v", len(nss))
+	}
+
+
+	// GetAllRelatedNodesInRange
+	nss, err = ag.GetAllRelatedNodesInRange(nodeTests[1].node.Name, 2)
+	if err != nil {
+		t.Errorf("Test failed, expected nil, got %v", err)
+	}
+
+	if len(nss) != 2 {
+		t.Errorf("Test failed, expected 2, got %v", len(nss))
+	}
+
+
+
 	// ~ delete the graph and all its nodes and edges
 	options := driver.RemoveGraphOptions{
 		DropCollections: true,
@@ -295,6 +328,8 @@ func TestArangoGraph_CRUD(t *testing.T) {
 	if err != nil {
 		t.Errorf("Test failed, expected nil, got %v", err)
 	}
+
+
 
 }
 

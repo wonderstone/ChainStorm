@@ -1,1 +1,1 @@
-{"_id":"test_collection/123","name":"test_name","data":{"key1":"value1","key2":"value2"}}
+{"_id":"test_collection/123","collection":"test_collection","name":"test_name","data":{"key1":"value1","key2":"value2"}}

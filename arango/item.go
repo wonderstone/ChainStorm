@@ -64,7 +64,7 @@ func (n *Node) CustomUnmarshalJSON(data []byte) error {
 type Edge struct {
 	ID           string                 `json:"_id"`
 	Relationship string                 `json:"relationship"`
-	Collection   string                 `json:"-"`
+	Collection   string                 `json:"collection"`
 	From         string                 `json:"_from"`
 	To           string                 `json:"_to"`
 	Data         map[string]interface{} `json:"data,omitempty"`
